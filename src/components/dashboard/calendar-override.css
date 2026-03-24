@@ -1,0 +1,15 @@
+.rbc-calendar {
+  @apply font-sans;
+}
+.rbc-toolbar button {
+  @apply rounded-md text-sm border-input bg-background hover:bg-accent hover:text-accent-foreground;
+}
+.rbc-toolbar button.rbc-active {
+  @apply bg-accent text-accent-foreground;
+}
+.rbc-event {
+  @apply bg-primary text-primary-foreground rounded text-xs px-1;
+}
+.rbc-today {
+  @apply bg-muted/50;
+}
