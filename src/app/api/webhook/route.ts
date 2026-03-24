@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateObject } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         payload.content.media?.type === "voice" ||
         payload.content.media?.type === "audio"
       ) {
-        console.log("🎤 Voice message detected, starting STT...");
+        console.log("🎤 Voice message detected, starting Gemini STT...");
         const stt = await speechToText(mediaUrl!);
         finalText = stt?.text?.trim() || null;
         console.log("📝 Transcription result:", finalText);
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     }
 
     /* --------------------------------------------------
-     * 4️⃣ PROCESS WITH AI
+     * 4️⃣ PROCESS WITH AI (GEMINI)
      * -------------------------------------------------- */
     // Ensure patient exists in DB
     const phone = payload.from;
@@ -96,7 +96,9 @@ export async function POST(request: Request) {
     }
 
     const { object: aiResponse } = await generateObject({
-      model: openai('gpt-4o-mini'),
+      model: google('gemini-2.0-flash-exp', {
+        apiKey: process.env.AI_API_KEY
+      }),
       schema: z.object({
         intent: z.enum(['BOOK_APPOINTMENT', 'GENERAL_INQUIRY', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),

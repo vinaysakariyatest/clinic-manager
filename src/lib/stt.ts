@@ -1,31 +1,34 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 export async function speechToText(url: string) {
   try {
+    const apiKey = process.env.AI_API_KEY;
+    if (!apiKey) throw new Error("AI_API_KEY (Gemini) is not defined");
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // Download audio
     const audioResponse = await fetch(url);
     if (!audioResponse.ok) throw new Error("Failed to fetch audio from URL");
-    
     const arrayBuffer = await audioResponse.arrayBuffer();
-    const blob = new Blob([arrayBuffer], { type: 'audio/ogg' });
-    
-    const formData = new FormData();
-    formData.append('file', blob, 'audio.ogg');
-    formData.append('model', 'whisper-1');
-    
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY || process.env.AI_API_KEY}`,
+    const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
+    // Transcribe using Gemini
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: "audio/ogg", // or audio/mpeg based on 11za payload, usually ogg/opus for WA
+          data: base64Audio,
+        },
       },
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || "OpenAI STT failed");
-    }
-    
-    return await response.json() as any;
+      { text: "Transcribe this audio exactly. Just give me the text, no extra comments." },
+    ]);
+
+    const transcription = result.response.text();
+    return { text: transcription.trim() };
   } catch (error) {
-    console.error("STT Error:", error);
+    console.error("Gemini STT Error:", error);
     return { text: "" };
   }
 }
