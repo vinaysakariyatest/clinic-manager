@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     console.log("Incoming 11za Payload:", JSON.stringify(payload, null, 2));
 
     // 1. Persist message to DB
-    await prisma.whatsappMessage.create({
+    await prisma.whatsAppMessage.create({
       data: {
         messageId: payload.messageId || `msg-${Date.now()}`,
         channel: payload.channel,
