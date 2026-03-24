@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     });
 
     const { object: aiResponse } = await generateObject({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-2.5-flash'),
       schema: z.object({
         intent: z.enum(['BOOK_APPOINTMENT', 'GENERAL_INQUIRY', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
