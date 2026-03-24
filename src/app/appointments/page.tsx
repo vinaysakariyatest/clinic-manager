@@ -1,17 +1,7 @@
 import prisma from "@/lib/prisma";
 import { AppointmentsTable } from "@/components/dashboard/appointments-table";
 import { SearchInput } from "@/components/dashboard/search-input";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { AddAppointmentForm } from "@/components/dashboard/add-appointment-form";
+import { AddAppointmentDialog } from "@/components/dashboard/add-appointment-dialog";
 
 export default async function AppointmentsPage({
   searchParams,
@@ -64,24 +54,7 @@ export default async function AppointmentsPage({
           </p>
         </div>
         
-        <Dialog>
-          <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Appointment
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Appointment</DialogTitle>
-              <DialogDescription>
-                Schedule an appointment manually for a patient.
-              </DialogDescription>
-            </DialogHeader>
-            <AddAppointmentForm 
-              doctors={doctors} 
-              onSuccess={() => {/* Page will revalidate via Server Action */}} 
-            />
-          </DialogContent>
-        </Dialog>
+        <AddAppointmentDialog doctors={doctors} />
       </div>
 
       <div className="flex items-center gap-4">

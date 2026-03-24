@@ -42,7 +42,7 @@ export default async function SettingsPage() {
                     <CheckCircle2 className="mr-1 h-3 w-3" /> Active
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
+                  <Badge className="text-red-600 border-red-200 bg-red-50 px-3">
                     <XCircle className="mr-1 h-3 w-3" /> Missing API Key
                   </Badge>
                 )}
@@ -58,7 +58,7 @@ export default async function SettingsPage() {
                     <CheckCircle2 className="mr-1 h-3 w-3" /> Connected
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
+                  <Badge className="text-red-600 border-red-200 bg-red-50 px-3">
                     <XCircle className="mr-1 h-3 w-3" /> Disconnected
                   </Badge>
                 )}

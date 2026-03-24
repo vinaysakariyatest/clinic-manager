@@ -23,7 +23,7 @@ export async function speechToText(url: string) {
       throw new Error(error.error?.message || "OpenAI STT failed");
     }
     
-    return await response.json();
+    return await response.json() as any;
   } catch (error) {
     console.error("STT Error:", error);
     return { text: "" };

@@ -11,7 +11,7 @@ const prismaClientSingleton = () => {
   }
 
   const pool = new pg.Pool({ connectionString })
-  const adapter = new PrismaPg(pool)
+  const adapter = new PrismaPg(pool) as any
   
   return new PrismaClient({ adapter })
 }
