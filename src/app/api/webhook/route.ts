@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
     const { object: aiResponse } = await generateObject({
       model: google('gemini-2.0-flash-exp', {
-        apiKey: process.env.AI_API_KEY
+        apiKey: process.env.AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
       }),
       schema: z.object({
         intent: z.enum(['BOOK_APPOINTMENT', 'GENERAL_INQUIRY', 'CANCEL_APPOINTMENT']),
