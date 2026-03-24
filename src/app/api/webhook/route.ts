@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateObject } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
@@ -83,6 +83,19 @@ export async function POST(request: Request) {
     /* --------------------------------------------------
      * 4️⃣ PROCESS WITH AI (GEMINI)
      * -------------------------------------------------- */
+    const apiKey = process.env.AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+    
+    console.log("AI API Key Diagnostic:", {
+      hasKey: !!apiKey,
+      keyLength: apiKey?.length,
+      envUsed: process.env.AI_API_KEY ? "AI_API_KEY" : (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "GOOGLE_GENERATIVE_AI_API_KEY" : (process.env.GEMINI_API_KEY ? "GEMINI_API_KEY" : "NONE"))
+    });
+
+    if (!apiKey) {
+      console.error("CRITICAL: AI API Key is missing in all expected environment variables (AI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY)!");
+      return NextResponse.json({ error: "Configuration Error: AI API Key missing" }, { status: 500 });
+    }
+
     // Ensure patient exists in DB
     const phone = payload.from;
     let patient = await prisma.patient.findUnique({ where: { phone } });
@@ -95,10 +108,12 @@ export async function POST(request: Request) {
       });
     }
 
+    const google = createGoogleGenerativeAI({
+      apiKey: apiKey
+    });
+
     const { object: aiResponse } = await generateObject({
-      model: google('gemini-2.0-flash-exp', {
-        apiKey: process.env.AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
-      }),
+      model: google('gemini-2.0-flash-exp'),
       schema: z.object({
         intent: z.enum(['BOOK_APPOINTMENT', 'GENERAL_INQUIRY', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),

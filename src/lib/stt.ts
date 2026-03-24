@@ -2,8 +2,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function speechToText(url: string) {
   try {
-    const apiKey = process.env.AI_API_KEY;
-    if (!apiKey) throw new Error("AI_API_KEY (Gemini) is not defined");
+    const apiKey = process.env.AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("AI API Key (Gemini) is not defined in environment variables (AI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY)");
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });

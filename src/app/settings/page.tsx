@@ -10,7 +10,7 @@ export default async function SettingsPage() {
     orderBy: { name: "asc" },
   });
 
-  const aiStatus = !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY;
+  const aiStatus = !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY || !!process.env.AI_API_KEY || !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const whatsappStatus = !!process.env.WHATSAPP_TOKEN;
 
   return (
