@@ -149,8 +149,10 @@ export async function POST(request: Request) {
       Available Doctors: ${doctorsContext}
       
       Instructions:
-      1. If user asks for a specific day (e.g. "Kal", "Next Monday", "26 March"), extract it in requested_date.
-      2. If user confirms doctor, we need to show slots.
+      1. If user mentions symptoms, use SUGGEST_DOCTOR. (ONLY suggest ONE doctor).
+      2. If user confirms a doctor, use CONFIRM_DOCTOR. 
+      3. If user provides/asks for time, use PROVIDE_TIME or extract requested_date.
+      4. DO NOT list available slots yourself. The system will append them automatically.
       Always reply in Hinglish. Be concise.`,
     });
 
