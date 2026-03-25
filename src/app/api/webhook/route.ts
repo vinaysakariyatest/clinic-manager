@@ -285,17 +285,27 @@ export async function POST(request: Request) {
         if (finalDocId) {
             const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
             let checkTime = new Date(now.getTime());
-            if (aiResponse.requested_date) { const d = new Date(aiResponse.requested_date); if (d > now) checkTime = d; }
-            const currentIST = new Date(checkTime.getTime() + istOffset);
-            if (currentIST.getUTCHours() < 9) { currentIST.setUTCHours(9, 0, 0, 0); checkTime = new Date(currentIST.getTime() - istOffset); }
-            else if (currentIST.getUTCHours() >= 18) {
-                const nextD = new Date(currentIST.getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); 
-                checkTime = new Date(nextD.getTime() - istOffset);
+            if (aiResponse.requested_date) {
+                const d = new Date(aiResponse.requested_date); 
+                if (d.toDateString() !== now.toDateString() && d > now) {
+                    checkTime = d; 
+                }
             }
-            else { checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0); }
+            const currentIST = new Date(checkTime.getTime() + istOffset);
+            if (currentIST.getUTCHours() < 9) {
+                currentIST.setUTCHours(9, 0, 0, 0);
+                checkTime = new Date(currentIST.getTime() - istOffset);
+            } else if (currentIST.getUTCHours() >= 18) {
+                currentIST.setDate(currentIST.getDate() + 1);
+                currentIST.setUTCHours(9, 0, 0, 0);
+                checkTime = new Date(currentIST.getTime() - istOffset);
+            } else {
+                checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0);
+            }
+            checkTime.setSeconds(0, 0);
 
-            const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
-            const bookedByPatient = (await prisma.appointment.findMany({ where: { patientId: patient.id, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
+            const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => { const d = new Date(a.date); d.setSeconds(0,0); return d.getTime(); });
+            const bookedByPatient = (await prisma.appointment.findMany({ where: { patientId: patient.id, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => { const d = new Date(a.date); d.setSeconds(0,0); return d.getTime(); });
             const booked = Array.from(new Set([...bookedByDoctor, ...bookedByPatient]));
             
             const display: string[] = []; const isoSlots: string[] = [];
@@ -304,7 +314,8 @@ export async function POST(request: Request) {
             while (display.length < 20) {
                 const hIST = new Date(checkTime.getTime() + istOffset).getUTCHours();
                 if (hIST >= 9 && hIST < 18) {
-                    if (!booked.includes(checkTime.getTime())) {
+                    const t = checkTime.getTime();
+                    if (!booked.includes(t) && t >= (now.getTime() - 60000)) { // 1 min buffer
                         display.push(`${display.length + 1}. ${checkTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
                         isoSlots.push(checkTime.toISOString());
                     }
@@ -313,6 +324,7 @@ export async function POST(request: Request) {
                     const nextD = new Date(new Date(checkTime.getTime() + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
+                checkTime.setSeconds(0, 0);
             }
             if (display.length > 0) {
                 slotText = `\n\n📅 *Date: ${dateStr}*\nSlots:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
