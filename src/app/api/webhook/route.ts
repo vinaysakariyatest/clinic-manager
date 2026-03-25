@@ -127,11 +127,13 @@ export async function POST(request: Request) {
         aiResponse.intent = 'CONFIRM_DOCTOR';
     }
 
-    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && aiResponse.suggested_doctor)) {
-        const doc = doctors.find(d => d.name.toLowerCase().includes(aiResponse.suggested_doctor?.toLowerCase() || ""));
-        // Only override if the AI explicitly provided a name or we are starting a fresh flow
-        if (doc && (nextState !== 'DOCTOR_SUGGESTED' || aiResponse.suggested_doctor)) {
-            finalDocId = doc.id;
+    const suggestedDoctor = aiResponse.suggested_doctor;
+    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && suggestedDoctor)) {
+        if (suggestedDoctor) {
+            const doc = doctors.find(d => d.name.toLowerCase().includes(suggestedDoctor.toLowerCase()));
+            if (doc) {
+                finalDocId = doc.id;
+            }
         }
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
