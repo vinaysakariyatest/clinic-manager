@@ -100,22 +100,22 @@ export async function POST(request: Request) {
     });
 
     const { object: aiResponse } = await generateObject({
-      model: mistral('mistral-small-latest'),
+      model: mistral('mistral-medium-latest'), // Using medium for better date extraction
       schema: z.object({
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
         suggested_doctor: z.string().optional().describe('Name of the suggested doctor among the available doctors'),
-        time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format if possible, otherwise keep empty'),
+        time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format if possible (assume IST +5:30), otherwise keep empty'),
         reply_message: z.string().describe('Friendly reply in Hinglish. Be helpful and professional. Max 2 sentences.'),
       }),
-      prompt: `You are clinical assistant "ClinicManager". Current time is ${new Date().toISOString()}.
+      prompt: `You are clinical assistant "ClinicManager". Current time is ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})} (IST).
       Analyze patient message and determine next steps based on state.
       
       Patient: ${patient.name}
       Message: "${finalText}"
       Current State: ${(patient as any).conversationState}
       Last Suggested Doctor ID: ${(patient as any).lastSuggestedDoctorId || 'None'}
-      Last Proposed Time: ${(patient as any).lastProposedTime?.toISOString() || 'None'}
+      Last Proposed Time: ${(patient as any).lastProposedTime?.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}) || 'None'}
       Available Doctors: ${doctorsContext}
       
       Flow Instructions:
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       5. If patient cancels or says no -> intent: CANCEL_APPOINTMENT.
       
       Special Case: If user provides symptoms AND time in one go, you can suggest doctor and jump to PROVIDE_TIME if appropriate.
-      Always reply in Hinglish. Be concise.`,
+      Always reply in Hinglish. Be concise. Assume all times mentioned by user are in Indian Standard Time (IST).`,
     });
 
     console.log("AI Response for WhatsApp:", aiResponse);
@@ -176,7 +176,6 @@ export async function POST(request: Request) {
 
             if (existingAppointment) {
                 replyMessage = `I'm sorry, that slot is already taken. Dr. ke paas dusra time available hai. Kya aap koi aur time choose kar sakte hain?`;
-                // Keep state as AWAITING_TIME
             } else {
                 await prisma.patient.update({
                   where: { id: patient.id },
@@ -185,7 +184,12 @@ export async function POST(request: Request) {
                     lastProposedTime: proposedTime
                   } as any
                 });
-                replyMessage = `Theek hai, ${proposedTime.toLocaleString()} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
+                const formattedTime = proposedTime.toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  dateStyle: "medium",
+                  timeStyle: "short"
+                });
+                replyMessage = `Theek hai, ${formattedTime} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
             }
         } else {
             replyMessage = "Kripya karke sahi date aur time batayein.";
