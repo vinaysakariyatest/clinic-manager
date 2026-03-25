@@ -81,19 +81,13 @@ export async function POST(request: Request) {
     }
 
     /* --------------------------------------------------
-     * 4️⃣ PROCESS WITH AI (GEMINI)
+     * 4️⃣ PROCESS WITH AI (MISTRAL)
      * -------------------------------------------------- */
-    const apiKey = process.env.AI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+    const mistralKey = process.env.MISTRAL_API_KEY;
     
-    console.log("AI API Key Diagnostic:", {
-      hasKey: !!apiKey,
-      keyLength: apiKey?.length,
-      envUsed: process.env.AI_API_KEY ? "AI_API_KEY" : (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "GOOGLE_GENERATIVE_AI_API_KEY" : (process.env.GEMINI_API_KEY ? "GEMINI_API_KEY" : "NONE"))
-    });
-
-    if (!apiKey) {
-      console.error("CRITICAL: AI API Key is missing in all expected environment variables (AI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY)!");
-      return NextResponse.json({ error: "Configuration Error: AI API Key missing" }, { status: 500 });
+    if (!mistralKey) {
+      console.error("CRITICAL: MISTRAL_API_KEY is missing in environment variables!");
+      return NextResponse.json({ error: "Configuration Error: Mistral API Key missing" }, { status: 500 });
     }
 
     // Ensure patient exists in DB
@@ -112,12 +106,13 @@ export async function POST(request: Request) {
     const doctors = await prisma.doctor.findMany();
     const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
 
-    const google = createGoogleGenerativeAI({
-      apiKey: apiKey
+    const { createMistral } = await import('@ai-sdk/mistral');
+    const mistral = createMistral({
+      apiKey: mistralKey
     });
 
     const { object: aiResponse } = await generateObject({
-      model: google('gemini-2.0-flash-lite'),
+      model: mistral('mistral-small-latest'),
       schema: z.object({
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
