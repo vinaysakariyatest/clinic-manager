@@ -14,6 +14,7 @@ model Patient {
   lastSuggestedDoctorId String?
   lastSymptoms          String?
   lastProposedTime      DateTime?
+  lastSuggestedSlots    String[]      @default([])
   createdAt             DateTime      @default(now())
   appointments          Appointment[]
 }

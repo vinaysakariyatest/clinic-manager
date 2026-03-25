@@ -94,92 +94,144 @@ export async function POST(request: Request) {
     const doctors = await prisma.doctor.findMany();
     const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
 
-    // 4.1 SLOT SUGGESTION LOGIC (Only if DOCTOR_SUGGESTED or AWAITING_TIME)
-    let availableSlotsContext = "";
-    if ((patient as any).lastSuggestedDoctorId && (['DOCTOR_SUGGESTED', 'AWAITING_TIME'].includes((patient as any).conversationState))) {
-        const now = new Date();
-        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        
-        const existingDocs = await prisma.appointment.findMany({
-          where: {
-            doctorId: (patient as any).lastSuggestedDoctorId,
-            date: { gte: now, lte: new Date(now.getTime() + 48 * 60 * 60 * 1000) },
-            status: { not: 'CANCELLED' }
-          }
-        });
-
-        const bookedTimes = existingDocs.map(d => d.date.getTime());
-        const suggestedSlots: string[] = [];
-        
-        // Check next 2 days
-        for (let i = 0; i < 2; i++) {
-          const checkDate = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
-          const year = checkDate.getFullYear();
-          const month = checkDate.getMonth();
-          const day = checkDate.getDate();
-
-          // Working hours 9 AM to 6 PM IST
-          for (let hour = 9; hour < 18; hour++) {
-            for (let min of [0, 30]) {
-              const slot = new Date(year, month, day, hour, min);
-              // Adjust for IST shift if server is UTC during Date() creation? 
-              // Better use direct UTC construction or fix offset.
-              // For simplicity, we create a date then check if it's in the past.
-              const istSlot = new Date(slot.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-              
-              if (istSlot > now && !bookedTimes.includes(istSlot.getTime())) {
-                suggestedSlots.push(istSlot.toLocaleString("en-IN", {
-                  timeZone: "Asia/Kolkata",
-                  month: "short",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true
-                }));
-              }
-              if (suggestedSlots.length >= 5) break;
-            }
-            if (suggestedSlots.length >= 5) break;
-          }
-          if (suggestedSlots.length >= 5) break;
+    // 4.1 NUMERIC SELECTION HANDLING
+    if ((patient as any).conversationState === 'AWAITING_TIME' && /^[1-5]$/.test(finalText || "")) {
+        const index = parseInt(finalText!) - 1;
+        const slots = (patient as any).lastSuggestedSlots as string[];
+        if (slots && slots[index]) {
+            const chosenTime = new Date(slots[index]);
+            await prisma.patient.update({
+              where: { id: patient.id },
+              data: {
+                conversationState: 'AWAITING_CONFIRMATION',
+                lastProposedTime: chosenTime
+              } as any
+            });
+            const formattedTime = chosenTime.toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              dateStyle: "medium",
+              timeStyle: "short"
+            });
+            const msg = `Theek hai, aapne option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du?`;
+            await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, msg);
+            return NextResponse.json({ success: true }, { status: 200 });
         }
-        availableSlotsContext = suggestedSlots.join(", ");
     }
+
+    // 1. First, we need to know if the user is asking for a specific date
+    // We'll do a quick pre-analysis or just let the AI tell us.
+    // Let's update the main generateObject to include detected_date.
 
     const { createMistral } = await import('@ai-sdk/mistral');
     const mistral = createMistral({
       apiKey: mistralKey
     });
 
+    // We'll calculate slots after the first AI pass if we want to be very precise, 
+    // OR just pass the next 7 days of availability summary.
+    // Let's refine the prompt and the logic.
+
     const { object: aiResponse } = await generateObject({
-      model: mistral('mistral-medium-latest'), // Using medium for better date extraction
+      model: mistral('mistral-medium-latest'), 
       schema: z.object({
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
-        symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
-        suggested_doctor: z.string().optional().describe('Name of the suggested doctor among the available doctors'),
-        time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format (e.g., 2026-03-26T13:00:00+05:30). ALWAYS INCLUDE THE +05:30 OFFSET.'),
-        reply_message: z.string().describe('Friendly reply in Hinglish. Be helpful and professional. Max 2 sentences.'),
+        symptoms: z.string().optional(),
+        suggested_doctor: z.string().optional(),
+        time_preference: z.string().optional().describe('ISO format if specific time mentioned'),
+        requested_date: z.string().optional().describe('ISO date if user asks for a specific day (e.g. tomorrow)'),
+        reply_message: z.string().describe('Friendly reply in Hinglish.'),
       }),
-      prompt: `You are clinical assistant "ClinicManager". Current time is ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})} (IST).
-      Analyze patient message and determine next steps based on state.
+      prompt: `You are clinical assistant "ClinicManager". Current time: ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})} (IST).
       
       Patient: ${patient.name}
       Message: "${finalText}"
-      Current State: ${(patient as any).conversationState}
-      Last Suggested Doctor ID: ${(patient as any).lastSuggestedDoctorId || 'None'}
+      State: ${(patient as any).conversationState}
       Available Doctors: ${doctorsContext}
-      Suggested Available Slots for this doctor: ${availableSlotsContext || 'Calculate once doctor is confirmed'}
       
-      Flow Instructions:
-      1. If state is IDLE and patient mentions symptoms/booking -> intent: SUGGEST_DOCTOR. Suggest a doctor.
-      2. If state is DOCTOR_SUGGESTED and patient confirms (yes/ok) -> intent: CONFIRM_DOCTOR. Recommend specific available slots from "Suggested Available Slots".
-      3. If state is AWAITING_TIME and patient provides time -> intent: PROVIDE_TIME. Extract time in time_preference. If time is invalid/past, ask again and show slots.
-      4. If state is AWAITING_CONFIRMATION and patient confirms -> intent: BOOK_APPOINTMENT.
-      5. If patient cancels or says no -> intent: CANCEL_APPOINTMENT.
-      
-      Special Case: If user provides symptoms AND time in one go, you can suggest doctor and jump to PROVIDE_TIME if appropriate.
-      Always reply in Hinglish. Be concise. Assume all times mentioned by user are in Indian Standard Time (IST).`,
+      Instructions:
+      1. If user asks for a specific day (e.g. "Kal", "Next Monday", "26 March"), extract it in requested_date.
+      2. If user confirms doctor, we need to show slots.
+      Always reply in Hinglish. Be concise.`,
     });
+
+    console.log("AI Response for WhatsApp:", aiResponse);
+
+    // 4. SLOT SUGGESTION LOGIC (Moved after AI detection)
+    let availableSlotsContext = "";
+    let suggestedSlotsISO: string[] = [];
+    
+    if ((patient as any).lastSuggestedDoctorId || aiResponse.suggested_doctor) {
+        const docId = (patient as any).lastSuggestedDoctorId || (await prisma.doctor.findFirst({
+            where: { name: { contains: aiResponse.suggested_doctor || "", mode: 'insensitive' } }
+        }))?.id;
+
+        if (docId) {
+            const now = new Date();
+            const istOffset = 5.5 * 60 * 60 * 1000;
+            
+            // If AI detected a specific date, start looking from there
+            let checkTime = new Date(now.getTime());
+            if (aiResponse.requested_date) {
+                checkTime = new Date(aiResponse.requested_date);
+                // Ensure it's not in the past relative to 'now'
+                if (checkTime < now) checkTime = new Date(now.getTime());
+            }
+            
+            // Start at 9 AM IST of the check day
+            const checkIST = new Date(checkTime.getTime() + istOffset);
+            if (checkIST.getUTCHours() < 9) {
+                checkIST.setUTCHours(9, 0, 0, 0);
+                checkTime = new Date(checkIST.getTime() - istOffset);
+            } else {
+                // Round to next 30 min
+                checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0);
+            }
+
+            const existingDocs = await prisma.appointment.findMany({
+              where: {
+                doctorId: docId,
+                date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) },
+                status: { not: 'CANCELLED' }
+              }
+            });
+            const bookedTimes = existingDocs.map(d => d.date.getTime());
+            const displaySlots: string[] = [];
+
+            while (displaySlots.length < 5) {
+              const istTime = new Date(checkTime.getTime() + istOffset);
+              const hour = istTime.getUTCHours();
+              
+              if (hour >= 9 && hour < 18) {
+                if (!bookedTimes.includes(checkTime.getTime())) {
+                  displaySlots.push(`${displaySlots.length + 1}. ${checkTime.toLocaleString("en-IN", {
+                    timeZone: "Asia/Kolkata",
+                    month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true
+                  })}`);
+                  suggestedSlotsISO.push(checkTime.toISOString());
+                }
+              } else if (hour >= 18) {
+                // Next day 9 AM IST
+                const nextDay = new Date(istTime.getTime() + 24 * 60 * 60 * 1000);
+                nextDay.setUTCHours(9, 0, 0, 0);
+                checkTime = new Date(nextDay.getTime() - istOffset);
+                continue; // Re-check this new time
+              }
+              checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
+              if (checkTime.getTime() > now.getTime() + 14 * 24 * 60 * 60 * 1000) break;
+            }
+            availableSlotsContext = displaySlots.join("\n");
+            
+            await prisma.patient.update({
+              where: { id: patient.id },
+              data: { lastSuggestedSlots: suggestedSlotsISO } as any
+            });
+
+            // If the user just asked for slots or confirmed doc, overwrite the reply to show these slots
+            if (aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.requested_date) {
+                aiResponse.reply_message += `\n\nAvailable slots:\n${availableSlotsContext}\n\nKripya 1 se 5 ke beech koi number bhejein.`;
+            }
+        }
+    }
 
     console.log("AI Response for WhatsApp:", aiResponse);
 
