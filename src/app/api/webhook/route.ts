@@ -71,6 +71,23 @@ export async function POST(request: Request) {
                 return NextResponse.json({ success: true });
             } else {
                 const chosenTime = new Date(items[index]);
+                
+                // CHECK FOR PATIENT BUSY AT THIS TIME
+                const patientBusy = await prisma.appointment.findFirst({
+                    where: { 
+                        patientId: patient.id, 
+                        date: chosenTime, 
+                        status: 'CONFIRMED' 
+                    },
+                    include: { doctor: true }
+                });
+
+                if (patientBusy) {
+                    const timeStr = chosenTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
+                    await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, `Aapka is samay (${timeStr}) par already ${patientBusy.doctor.name} ke saath appointment hai. Kripya koi aur option choose karein.`);
+                    return NextResponse.json({ success: true });
+                }
+
                 await prisma.patient.update({
                   where: { id: patient.id },
                   data: { conversationState: 'AWAITING_CONFIRMATION', lastProposedTime: chosenTime } as any
@@ -100,11 +117,6 @@ export async function POST(request: Request) {
     startOfTodayIST.setUTCHours(0, 0, 0, 0);
     const startOfTodayUTC = new Date(startOfTodayIST.getTime() - istOffset);
     const nextDayUTC = new Date(startOfTodayUTC.getTime() + 24 * 60 * 60 * 1000);
-
-    const existingToday = await prisma.appointment.findFirst({
-      where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC, lt: nextDayUTC } },
-      include: { doctor: true }
-    });
 
     // 2. AI INTENT DETECTION
     const doctors = await prisma.doctor.findMany();
@@ -238,11 +250,21 @@ export async function POST(request: Request) {
         aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke liye available slots ye rahi. Aap kaun sa samay chunna chahenge?`;
     }
 
-    if (existingToday && (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME')) {
-        const isToday = !aiResponse.requested_date || new Date(aiResponse.requested_date).toDateString() === now.toDateString();
-        if (isToday) {
-            const timeStr = existingToday.date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
-            aiResponse.reply_message = `Aapka aaj ka appointment already confirmed hai: ${existingToday.doctor?.name} ke saath ${timeStr} baje. Ek hi din mein do appointments allow nahi hain. Kripya naya message karke kisi aur date ka check karein.`;
+    // Same symptom check
+    if (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'CONFIRM_DOCTOR') {
+        const currentSymptom = (aiResponse.symptoms || finalText).toLowerCase();
+        const existingAppWithSameSymptom = await prisma.appointment.findFirst({
+            where: { 
+                patientId: patient!.id, 
+                status: 'CONFIRMED', 
+                symptoms: { contains: currentSymptom, mode: 'insensitive' },
+                date: { gte: startOfTodayUTC }
+            },
+            include: { doctor: true }
+        });
+
+        if (existingAppWithSameSymptom) {
+            aiResponse.reply_message = `Aapka is problem (symptoms: ${existingAppWithSameSymptom.symptoms}) ke liye already ek upcoming appointment hai: ${existingAppWithSameSymptom.doctor.name} ke saath. Alag problem ke liye aap naya appointment book kar sakte hain.`;
             nextState = 'IDLE';
         }
     }
@@ -267,7 +289,10 @@ export async function POST(request: Request) {
             if (currentIST.getUTCHours() < 9) { currentIST.setUTCHours(9, 0, 0, 0); checkTime = new Date(currentIST.getTime() - istOffset); }
             else { checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0); }
 
-            const booked = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
+
+            const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
+            const bookedByPatient = (await prisma.appointment.findMany({ where: { patientId: patient.id, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
+            const booked = Array.from(new Set([...bookedByDoctor, ...bookedByPatient]));
             const display: string[] = []; const isoSlots: string[] = [];
             while (display.length < 5) {
                 const hIST = new Date(checkTime.getTime() + istOffset).getUTCHours();
