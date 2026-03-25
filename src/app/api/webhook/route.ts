@@ -65,6 +65,18 @@ export async function POST(request: Request) {
         }
     }
 
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const startOfTodayIST = new Date(now.getTime() + istOffset);
+    startOfTodayIST.setUTCHours(0, 0, 0, 0);
+    const startOfTodayUTC = new Date(startOfTodayIST.getTime() - istOffset);
+    const nextDayUTC = new Date(startOfTodayUTC.getTime() + 24 * 60 * 60 * 1000);
+
+    const existingToday = await prisma.appointment.findFirst({
+      where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC, lt: nextDayUTC } },
+      include: { doctor: true }
+    });
+
     // 2. AI INTENT DETECTION
     const doctors = await prisma.doctor.findMany();
     const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
@@ -79,7 +91,8 @@ export async function POST(request: Request) {
     const { object: aiResponse } = await generateObject({
       model: mistral('mistral-medium-latest'), 
       schema: z.object({
-        intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT', 'RESTART']),
+        intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT', 'RESTART', 'VIEW_APPOINTMENTS']),
+        symptoms: z.string().optional(),
         suggested_doctor: z.string().optional(),
         time_preference: z.string().optional(),
         requested_date: z.string().optional(),
@@ -93,6 +106,7 @@ export async function POST(request: Request) {
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR.
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
       - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT.
+      - If user asks to see their booking/appointment -> VIEW_APPOINTMENTS.
       - Max 2-3 sentences. Hinglish only.`,
     });
 
@@ -126,11 +140,42 @@ export async function POST(request: Request) {
     } else if (aiResponse.intent === 'CANCEL_APPOINTMENT') {
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
         aiResponse.reply_message = "Theek hai, appointment cancel ho gaya hai.";
+    } else if (aiResponse.intent === 'VIEW_APPOINTMENTS') {
+        const futureApps = await prisma.appointment.findMany({
+            where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC } },
+            include: { doctor: true },
+            orderBy: { date: 'asc' }
+        });
+        
+        if (futureApps.length > 0) {
+            const list = futureApps.map(a => {
+                const d = new Date(a.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+                return `• Dr. ${a.doctor.name} - ${d}`;
+            }).join('\n');
+            aiResponse.reply_message = `Aapke upcoming appointments ye hain:\n\n${list}`;
+        } else {
+            aiResponse.reply_message = "Aapka koi upcoming appointment nahi mila. Kya main naya book karne mein madad karu?";
+        }
+        nextState = 'IDLE';
+    }
+
+    if (existingToday && (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME')) {
+        const isToday = !aiResponse.requested_date || new Date(aiResponse.requested_date).toDateString() === now.toDateString();
+        if (isToday) {
+            const timeStr = existingToday.date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
+            aiResponse.reply_message = `Aapka aaj ka appointment already confirmed hai: Dr. ${existingToday.doctor?.name} ke saath ${timeStr} baje. Ek hi din mein do appointments allow nahi hain. Kripya naya message karke kisi aur date ka check karein.`;
+            nextState = 'IDLE';
+        }
     }
 
     patient = await prisma.patient.update({
         where: { id: patient!.id },
-        data: { conversationState: nextState, lastSuggestedDoctorId: finalDocId, lastProposedTime: finalProposedTime, lastSymptoms: (nextState === 'DOCTOR_SUGGESTED' ? finalText : (patient as any).lastSymptoms) } as any
+        data: { 
+            conversationState: nextState, 
+            lastSuggestedDoctorId: finalDocId, 
+            lastProposedTime: finalProposedTime, 
+            lastSymptoms: (aiResponse.symptoms || (nextState === 'DOCTOR_SUGGESTED' ? finalText : (patient as any).lastSymptoms))
+        } as any
     });
 
     // 4. SLOT GEN
