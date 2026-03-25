@@ -145,7 +145,7 @@ export async function POST(request: Request) {
     const { object: aiResponse } = await generateObject({
       model: mistral('mistral-medium-latest'), 
       schema: z.object({
-        intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
+        intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT', 'RESTART']),
         symptoms: z.string().optional(),
         suggested_doctor: z.string().optional(),
         time_preference: z.string().optional().describe('ISO format if specific time mentioned'),
@@ -161,16 +161,18 @@ export async function POST(request: Request) {
       Available Doctors: ${doctorsContext}
       
       Instructions:
-      1. If state is IDLE and patient mentions symptoms, use SUGGEST_DOCTOR. (ONLY suggest ONE best doctor).
-      2. If state is DOCTOR_SUGGESTED and patient confirms, use CONFIRM_DOCTOR. **DO NOT CHANGE THE DOCTOR (Stay with ${lastDoctorName})**.
-      3. If user provides/asks for time, use PROVIDE_TIME or extract requested_date.
-      4. DO NOT list available slots yourself. The system will append them automatically.
+      1. If user mentions new symptoms or says "start over" / "shuru se", use RESTART or SUGGEST_DOCTOR.
+      2. If state is IDLE and patient mentions symptoms, use SUGGEST_DOCTOR. (ONLY suggest ONE best doctor).
+      3. If state is DOCTOR_SUGGESTED and patient confirms, use CONFIRM_DOCTOR. **DO NOT CHANGE THE DOCTOR (Stay with ${lastDoctorName})**.
+      4. If user provides/asks for time, use PROVIDE_TIME or extract requested_date.
+      5. DO NOT list available slots yourself. The system will append them automatically.
       Always reply in Hinglish. Be concise.`,
     });
 
     console.log("AI Response for WhatsApp:", aiResponse);
 
     // 4. SLOT SUGGESTION LOGIC (Moved after AI detection)
+    // ... (Already implemented below)
     let availableSlotsContext = "";
     let suggestedSlotsISO: string[] = [];
     
@@ -255,7 +257,7 @@ export async function POST(request: Request) {
     // (replyMessage is already initialized above)
     replyMessage = aiResponse.reply_message;
 
-    if (aiResponse.intent === 'SUGGEST_DOCTOR') {
+    if (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'RESTART') {
         const doctor = await prisma.doctor.findFirst({
           where: { name: { contains: aiResponse.suggested_doctor || "", mode: 'insensitive' } }
         });
@@ -268,7 +270,9 @@ export async function POST(request: Request) {
               data: {
                 conversationState: 'DOCTOR_SUGGESTED',
                 lastSuggestedDoctorId: targetDoctorId,
-                lastSymptoms: aiResponse.symptoms || finalText
+                lastSymptoms: aiResponse.symptoms || finalText,
+                lastProposedTime: null,
+                lastSuggestedSlots: []
               } as any
             });
         }
@@ -291,36 +295,36 @@ export async function POST(request: Request) {
                 replyMessage = `I'm sorry, aap bite hue waqt (past time) ka appointment nahi le sakte. Kripya koi future time choose karein. Available slots: ${availableSlotsContext}`;
             } else {
                 // Availability Check (30 min window)
-            const thirtyMins = 30 * 60 * 1000;
-            const existingAppointment = await prisma.appointment.findFirst({
-              where: {
-                doctorId: (patient as any).lastSuggestedDoctorId,
-                date: {
-                  gte: new Date(proposedTime.getTime() - thirtyMins),
-                  lte: new Date(proposedTime.getTime() + thirtyMins),
-                },
-                status: { not: 'CANCELLED' }
-              }
-            });
+                const thirtyMins = 30 * 60 * 1000;
+                const existingAppointment = await prisma.appointment.findFirst({
+                  where: {
+                    doctorId: (patient as any).lastSuggestedDoctorId,
+                    date: {
+                      gte: new Date(proposedTime.getTime() - thirtyMins),
+                      lte: new Date(proposedTime.getTime() + thirtyMins),
+                    },
+                    status: { not: 'CANCELLED' }
+                  }
+                });
 
-            if (existingAppointment) {
-                replyMessage = `I'm sorry, that slot is already taken. Dr. ke paas dusra time available hai. Kya aap koi aur time choose kar sakte hain?`;
-            } else {
-                await prisma.patient.update({
-                  where: { id: patient.id },
-                  data: {
-                    conversationState: 'AWAITING_CONFIRMATION',
-                    lastProposedTime: proposedTime
-                  } as any
-                });
-                const formattedTime = proposedTime.toLocaleString("en-IN", {
-                  timeZone: "Asia/Kolkata",
-                  dateStyle: "medium",
-                  timeStyle: "short"
-                });
-                replyMessage = `Theek hai, ${formattedTime} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
+                if (existingAppointment) {
+                    replyMessage = `I'm sorry, that slot is already taken. Dr. ke paas dusra time available hai. Kya aap koi aur time choose kar sakte hain?`;
+                } else {
+                    await prisma.patient.update({
+                      where: { id: patient.id },
+                      data: {
+                        conversationState: 'AWAITING_CONFIRMATION',
+                        lastProposedTime: proposedTime
+                      } as any
+                    });
+                    const formattedTime = proposedTime.toLocaleString("en-IN", {
+                      timeZone: "Asia/Kolkata",
+                      dateStyle: "medium",
+                      timeStyle: "short"
+                    });
+                    replyMessage = `Theek hai, ${formattedTime} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
+                }
             }
-          }
         } else {
             replyMessage = "Kripya karke sahi date aur time batayein.";
         }
