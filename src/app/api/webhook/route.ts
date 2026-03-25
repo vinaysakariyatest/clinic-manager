@@ -103,9 +103,9 @@ export async function POST(request: Request) {
       Message: "${finalText}"
       Available: ${doctorsContext}
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR.
-      - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Always stick to the Last Doctor: ${lastDoctorName}).
+      - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
-      - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT.
+      - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT (With ${lastDoctorName}).
       - If user asks to see their booking/appointment -> VIEW_APPOINTMENTS.
       - Max 2-3 sentences. Hinglish only.`,
     });
@@ -127,7 +127,9 @@ export async function POST(request: Request) {
         if (doc) finalDocId = doc.id;
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
+        const doc = doctors.find(d => d.id === finalDocId);
         nextState = 'AWAITING_TIME';
+        aiResponse.reply_message = `${doc?.name || "Doctor"} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
     } else if ((aiResponse.intent === 'BOOK_APPOINTMENT' || (isConfirming && nextState === 'AWAITING_CONFIRMATION')) && nextState === 'AWAITING_CONFIRMATION') {
         const doc = doctors.find(d => d.id === finalDocId);
         const time = (patient as any).lastProposedTime;
@@ -157,6 +159,9 @@ export async function POST(request: Request) {
             aiResponse.reply_message = "Aapka koi upcoming appointment nahi mila. Kya main naya book karne mein madad karu?";
         }
         nextState = 'IDLE';
+    } else if (aiResponse.intent === 'PROVIDE_TIME') {
+        const doc = doctors.find(d => d.id === finalDocId);
+        aiResponse.reply_message = `${doc?.name || "Doctor"} ke liye available slots ye rahi. Aap kaun sa samay chunna chahenge?`;
     }
 
     if (existingToday && (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME')) {
