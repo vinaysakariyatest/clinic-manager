@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
         suggested_doctor: z.string().optional().describe('Name of the suggested doctor among the available doctors'),
-        time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format if possible (assume IST +5:30), otherwise keep empty'),
+        time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format (e.g., 2026-03-26T13:00:00+05:30). ALWAYS INCLUDE THE +05:30 OFFSET.'),
         reply_message: z.string().describe('Friendly reply in Hinglish. Be helpful and professional. Max 2 sentences.'),
       }),
       prompt: `You are clinical assistant "ClinicManager". Current time is ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})} (IST).
@@ -159,7 +159,12 @@ export async function POST(request: Request) {
         });
     } else if (aiResponse.intent === 'PROVIDE_TIME' || (aiResponse.time_preference && (patient as any).conversationState === 'AWAITING_TIME')) {
         if (aiResponse.time_preference && (patient as any).lastSuggestedDoctorId) {
-            const proposedTime = new Date(aiResponse.time_preference);
+            let proposedTimeStr = aiResponse.time_preference;
+            // Force +05:30 if it's missing
+            if (!proposedTimeStr.includes('+') && !proposedTimeStr.includes('-') && !proposedTimeStr.endsWith('Z')) {
+                proposedTimeStr += '+05:30';
+            }
+            const proposedTime = new Date(proposedTimeStr);
             
             // Availability Check (30 min window)
             const thirtyMins = 30 * 60 * 1000;
