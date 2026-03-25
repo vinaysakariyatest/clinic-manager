@@ -90,8 +90,9 @@ export async function POST(request: Request) {
       Message: "${finalText}"
       Available: ${doctorsContext}
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR.
-      - If user confirms doctor -> CONFIRM_DOCTOR.
+      - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR.
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
+      - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT.
       - Max 2-3 sentences. Hinglish only.`,
     });
 
@@ -105,13 +106,15 @@ export async function POST(request: Request) {
         aiResponse.reply_message = "Theek hai, shuru se start karte hain. Aapko kya symptoms hain ya kis doctor se milna hai?";
     }
 
+    const isConfirming = finalText && (finalText.toLowerCase().includes('yes') || finalText.toLowerCase().includes('haan') || finalText.toLowerCase().includes('ok') || finalText.toLowerCase().includes('confirm') || finalText.toLowerCase().includes('theek hai'));
+
     if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && aiResponse.suggested_doctor)) {
         const doc = doctors.find(d => d.name.toLowerCase().includes(aiResponse.suggested_doctor?.toLowerCase() || ""));
         finalDocId = doc?.id || doctors[0]?.id;
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
         nextState = 'AWAITING_TIME';
-    } else if (aiResponse.intent === 'BOOK_APPOINTMENT' && nextState === 'AWAITING_CONFIRMATION') {
+    } else if ((aiResponse.intent === 'BOOK_APPOINTMENT' || (isConfirming && nextState === 'AWAITING_CONFIRMATION')) && nextState === 'AWAITING_CONFIRMATION') {
         const doc = doctors.find(d => d.id === finalDocId);
         const time = (patient as any).lastProposedTime;
         const formatted = time ? new Date(time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "";
