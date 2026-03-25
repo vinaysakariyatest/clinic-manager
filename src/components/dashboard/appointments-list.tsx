@@ -1,3 +1,5 @@
+"use client";
+
 import { format } from "date-fns";
 
 export function AppointmentsList({ initialAppointments }: { initialAppointments: any[] }) {
@@ -17,7 +19,14 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
             <p className="text-sm text-muted-foreground truncate" title={appointment.title}>{appointment.title}</p>
           </div>
           <div className="ml-auto flex flex-col items-end gap-1 shrink-0">
-            <div className="text-sm font-medium whitespace-nowrap">{format(new Date(appointment.start), "hh:mm a")}</div>
+            <div className="text-sm font-medium whitespace-nowrap">
+              {new Date(appointment.start).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+              })}
+            </div>
             <div
               className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
                 appointment.status === "CONFIRMED"

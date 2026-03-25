@@ -1,4 +1,5 @@
-import { format } from "date-fns";
+"use client";
+
 import {
   Table,
   TableBody,
@@ -43,7 +44,15 @@ export function AppointmentsTable({ appointments }: { appointments: AppointmentW
           {appointments.map((appointment) => (
             <TableRow key={appointment.id}>
               <TableCell className="font-medium">
-                {format(new Date(appointment.date), "MMM dd, yyyy - hh:mm a")}
+                {new Date(appointment.date).toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  month: "short",
+                  day: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true
+                })}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col">
