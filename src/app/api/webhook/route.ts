@@ -46,23 +46,52 @@ export async function POST(request: Request) {
     }
 
     // 1. HANDLE NUMERIC PICK (1-5)
-    const canPickSlot = ['AWAITING_TIME', 'DOCTOR_SUGGESTED','AWAITING_CONFIRMATION'].includes((patient as any).conversationState);
-    if (canPickSlot && /^[1-5]$/.test(finalText)) {
+    const currentState = (patient as any).conversationState;
+    const canPickSlot = ['AWAITING_TIME', 'DOCTOR_SUGGESTED','AWAITING_CONFIRMATION'].includes(currentState);
+    const canPickCancel = currentState === 'AWAITING_CANCEL_PICK';
+
+    if ((canPickSlot || canPickCancel) && /^[1-5]$/.test(finalText)) {
         const index = parseInt(finalText) - 1;
-        const slots = (patient as any).lastSuggestedSlots as string[];
-        if (slots && slots[index] && (patient as any).lastSuggestedDoctorId) {
-            const chosenTime = new Date(slots[index]);
-            await prisma.patient.update({
-              where: { id: patient.id },
-              data: { conversationState: 'AWAITING_CONFIRMATION', lastProposedTime: chosenTime } as any
-            });
-            const formattedTime = chosenTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-            const doc = await prisma.doctor.findUnique({ where: { id: (patient as any).lastSuggestedDoctorId } });
-            
-            const msg = `Theek hai, aapne ${doc?.name || "Doctor"} ke liye option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du?`;
-            await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, msg);
-            return NextResponse.json({ success: true });
+        const items = (patient as any).lastSuggestedSlots as string[];
+        
+        if (items && items[index]) {
+            if (canPickCancel) {
+                const appId = items[index];
+                const cancelledApp = await prisma.appointment.update({
+                    where: { id: appId },
+                    data: { status: 'CANCELLED' },
+                    include: { doctor: true }
+                });
+                await prisma.patient.update({
+                    where: { id: patient.id },
+                    data: { conversationState: 'IDLE', lastSuggestedSlots: [] } as any
+                });
+                const formattedTime = new Date(cancelledApp.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+                await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, `Aapka ${cancelledApp.doctor.name} ke saath ${formattedTime} ka appointment cancel kar diya gaya hai.`);
+                return NextResponse.json({ success: true });
+            } else {
+                const chosenTime = new Date(items[index]);
+                await prisma.patient.update({
+                  where: { id: patient.id },
+                  data: { conversationState: 'AWAITING_CONFIRMATION', lastProposedTime: chosenTime } as any
+                });
+                const formattedTime = chosenTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+                const doc = await prisma.doctor.findUnique({ where: { id: (patient as any).lastSuggestedDoctorId } });
+                
+                const msg = `Theek hai, aapne ${doc?.name || "Doctor"} ke liye option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du?`;
+                await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, msg);
+                return NextResponse.json({ success: true });
+            }
         }
+    }
+
+    if (canPickCancel && (finalText.toLowerCase().includes('no') || finalText.toLowerCase().includes('exit') || finalText.toLowerCase().includes('back'))) {
+        await prisma.patient.update({
+            where: { id: patient.id },
+            data: { conversationState: 'IDLE', lastSuggestedSlots: [] } as any
+        });
+        await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, "Theek hai, cancellation cancel kar di gayi hai.");
+        return NextResponse.json({ success: true });
     }
 
     const now = new Date();
@@ -107,7 +136,8 @@ export async function POST(request: Request) {
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
       - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT (With ${lastDoctorName}).
-      - If user asks to see their booking/appointment -> VIEW_APPOINTMENTS.
+      - If user asks to see their booking/appointment/list -> VIEW_APPOINTMENTS.
+      - If user wants to cancel an appointment -> CANCEL_APPOINTMENT.
       - IMPORTANT: When suggesting a doctor, you MUST return the correct "suggested_doctor_id" from the list.
       - Max 2-3 sentences. Hinglish only.`,
     });
@@ -164,8 +194,29 @@ export async function POST(request: Request) {
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
         aiResponse.reply_message = `Aapka ${getDocDisplay((patient as any).lastSuggestedDoctorId)} ke saath ${formatted} ka appointment confirm ho gaya hai! Thank you.`;
     } else if (aiResponse.intent === 'CANCEL_APPOINTMENT') {
-        nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
-        aiResponse.reply_message = "Theek hai, appointment cancel ho gaya hai.";
+        const futureApps = await prisma.appointment.findMany({
+            where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC } },
+            include: { doctor: true },
+            orderBy: { date: 'asc' }
+        });
+
+        if (futureApps.length === 0) {
+            aiResponse.reply_message = "Aapka koi upcoming confirmed appointment nahi mila.";
+            nextState = 'IDLE';
+        } else {
+            const list = futureApps.map((a, i) => {
+                const d = new Date(a.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+                return `${i + 1}. ${a.doctor.name} - ${d}`;
+            }).join('\n');
+            aiResponse.reply_message = `Aap kaun sa appointment cancel karna chahte hain? Please number choose karein (1-${futureApps.length}):\n\n${list}\n\nType "no" ya "exit" cancel karne ke liye.`;
+            nextState = 'AWAITING_CANCEL_PICK';
+            await prisma.patient.update({
+                where: { id: patient!.id },
+                data: { lastSuggestedSlots: futureApps.map(a => a.id), conversationState: 'AWAITING_CANCEL_PICK' } as any
+            });
+            await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, aiResponse.reply_message);
+            return NextResponse.json({ success: true });
+        }
     } else if (aiResponse.intent === 'VIEW_APPOINTMENTS') {
         const futureApps = await prisma.appointment.findMany({
             where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC } },
