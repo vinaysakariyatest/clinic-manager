@@ -122,9 +122,17 @@ export async function POST(request: Request) {
 
     const isConfirming = finalText && (finalText.toLowerCase().includes('yes') || finalText.toLowerCase().includes('haan') || finalText.toLowerCase().includes('ok') || finalText.toLowerCase().includes('confirm') || finalText.toLowerCase().includes('theek hai'));
 
+    // Force CONFIRM_DOCTOR if user says "Yes" while in DOCTOR_SUGGESTED
+    if (nextState === 'DOCTOR_SUGGESTED' && isConfirming) {
+        aiResponse.intent = 'CONFIRM_DOCTOR';
+    }
+
     if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && aiResponse.suggested_doctor)) {
         const doc = doctors.find(d => d.name.toLowerCase().includes(aiResponse.suggested_doctor?.toLowerCase() || ""));
-        if (doc) finalDocId = doc.id;
+        // Only override if the AI explicitly provided a name or we are starting a fresh flow
+        if (doc && (nextState !== 'DOCTOR_SUGGESTED' || aiResponse.suggested_doctor)) {
+            finalDocId = doc.id;
+        }
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
         const doc = doctors.find(d => d.id === finalDocId);
