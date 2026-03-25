@@ -3,8 +3,6 @@ import prisma from './src/lib/prisma';
 
 async function main() {
   const doctors = await prisma.doctor.findMany();
-  console.log('Available Doctors:');
-  console.log(JSON.stringify(doctors, null, 2));
+  doctors.forEach(d => console.log(`${d.id}: ${d.name} (${d.specialization})`));
 }
-
 main().catch(console.error).finally(() => prisma.$disconnect());

@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     // 2. AI INTENT DETECTION
     const doctors = await prisma.doctor.findMany();
-    const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
+    const doctorsContext = doctors.map(d => `ID: ${d.id}, Name: ${d.name} (${d.specialization})`).join('\n');
     let lastDoctorName = "None";
     if ((patient as any).lastSuggestedDoctorId) {
         lastDoctorName = doctors.find(d => d.id === (patient as any).lastSuggestedDoctorId)?.name || "None";
@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       schema: z.object({
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT', 'RESTART', 'VIEW_APPOINTMENTS']),
         symptoms: z.string().optional(),
+        suggested_doctor_id: z.string().optional(),
         suggested_doctor: z.string().optional(),
         time_preference: z.string().optional(),
         requested_date: z.string().optional(),
@@ -102,11 +103,12 @@ export async function POST(request: Request) {
       Patient: ${patient.name}, State: ${(patient as any).conversationState}, Last Doctor: ${lastDoctorName}
       Message: "${finalText}"
       Available: ${doctorsContext}
-      - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR.
+      - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR. Use the exact ID from the list below.
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
       - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT (With ${lastDoctorName}).
       - If user asks to see their booking/appointment -> VIEW_APPOINTMENTS.
+      - IMPORTANT: When suggesting a doctor, you MUST return the correct "suggested_doctor_id" from the list.
       - Max 2-3 sentences. Hinglish only.`,
     });
 
@@ -114,6 +116,16 @@ export async function POST(request: Request) {
     let nextState = (patient as any).conversationState;
     let finalDocId = (patient as any).lastSuggestedDoctorId;
     let finalProposedTime = (patient as any).lastProposedTime;
+
+    const suggestedDoctor = aiResponse.suggested_doctor;
+    const suggestedDoctorId = aiResponse.suggested_doctor_id;
+
+    // Helper to get doctor display name
+    const getDocDisplay = (id: string | null) => {
+        if (!id) return "Doctor";
+        const d = doctors.find(doc => doc.id === id);
+        return d ? `${d.name} (${d.specialization})` : "Doctor";
+    };
 
     if (aiResponse.intent === 'RESTART') {
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
@@ -127,19 +139,21 @@ export async function POST(request: Request) {
         aiResponse.intent = 'CONFIRM_DOCTOR';
     }
 
-    const suggestedDoctor = aiResponse.suggested_doctor;
-    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && suggestedDoctor)) {
-        if (suggestedDoctor) {
-            const doc = doctors.find(d => d.name.toLowerCase().includes(suggestedDoctor.toLowerCase()));
-            if (doc) {
-                finalDocId = doc.id;
-            }
+    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && (suggestedDoctor || suggestedDoctorId))) {
+        if (suggestedDoctorId) {
+            const doc = doctors.find(d => d.id === suggestedDoctorId);
+            if (doc) finalDocId = doc.id;
+        } else if (suggestedDoctor) {
+            const doc = doctors.find(d => 
+                d.name.toLowerCase().includes(suggestedDoctor.toLowerCase()) || 
+                d.specialization.toLowerCase().includes(suggestedDoctor.toLowerCase())
+            );
+            if (doc) finalDocId = doc.id;
         }
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
-        const doc = doctors.find(d => d.id === finalDocId);
         nextState = 'AWAITING_TIME';
-        aiResponse.reply_message = `${doc?.name || "Doctor"} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
+        aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
     } else if ((aiResponse.intent === 'BOOK_APPOINTMENT' || (isConfirming && nextState === 'AWAITING_CONFIRMATION')) && nextState === 'AWAITING_CONFIRMATION') {
         const doc = doctors.find(d => d.id === finalDocId);
         const time = (patient as any).lastProposedTime;
@@ -148,7 +162,7 @@ export async function POST(request: Request) {
             data: { patientId: patient!.id, doctorId: finalDocId!, date: time!, symptoms: (patient as any).lastSymptoms || finalText, status: "CONFIRMED" }
         });
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
-        aiResponse.reply_message = `Aapka ${doc?.name || "Doctor"} ke saath ${formatted} ka appointment confirm ho gaya hai! Thank you.`;
+        aiResponse.reply_message = `Aapka ${getDocDisplay((patient as any).lastSuggestedDoctorId)} ke saath ${formatted} ka appointment confirm ho gaya hai! Thank you.`;
     } else if (aiResponse.intent === 'CANCEL_APPOINTMENT') {
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
         aiResponse.reply_message = "Theek hai, appointment cancel ho gaya hai.";
@@ -170,8 +184,7 @@ export async function POST(request: Request) {
         }
         nextState = 'IDLE';
     } else if (aiResponse.intent === 'PROVIDE_TIME') {
-        const doc = doctors.find(d => d.id === finalDocId);
-        aiResponse.reply_message = `${doc?.name || "Doctor"} ke liye available slots ye rahi. Aap kaun sa samay chunna chahenge?`;
+        aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke liye available slots ye rahi. Aap kaun sa samay chunna chahenge?`;
     }
 
     if (existingToday && (aiResponse.intent === 'SUGGEST_DOCTOR' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME')) {
@@ -195,7 +208,7 @@ export async function POST(request: Request) {
 
     // 4. SLOT GEN
     let slotText = "";
-    if (nextState === 'AWAITING_TIME' || aiResponse.requested_date) {
+    if (nextState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date) {
         if (finalDocId) {
             const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000; let checkTime = new Date(now.getTime());
             if (aiResponse.requested_date) { const d = new Date(aiResponse.requested_date); if (d > now) checkTime = d; }
