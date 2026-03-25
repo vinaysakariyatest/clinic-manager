@@ -226,6 +226,7 @@ export async function POST(request: Request) {
                         isoSlots.push(checkTime.toISOString());
                     }
                 } else if (hIST >= 18) {
+                    if (display.length > 0) break; 
                     const nextD = new Date(new Date(checkTime.getTime() + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
