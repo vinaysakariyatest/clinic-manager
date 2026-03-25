@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { generateObject } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
@@ -55,25 +54,14 @@ export async function POST(request: Request) {
      * 3️⃣ NORMALIZE MESSAGE (Handle Text & Voice)
      * -------------------------------------------------- */
     let finalText: string | null = null;
-    let mediaUrl: string | null = null;
+    let replyMessage: string = "";
 
     if (payload.content?.contentType === "text") {
       finalText = payload.content.text?.trim() || null;
     }
 
     if (payload.content?.contentType === "media") {
-      mediaUrl = payload.content.media?.url || null;
-
-      // Handle Voice/Audio Messages
-      if (
-        payload.content.media?.type === "voice" ||
-        payload.content.media?.type === "audio"
-      ) {
-        console.log("🎤 Voice message detected, starting Gemini STT...");
-        const stt = await speechToText(mediaUrl!);
-        finalText = stt?.text?.trim() || null;
-        console.log("📝 Transcription result:", finalText);
-      }
+      replyMessage = "I'm sorry, voice messages are currently not supported. Please send a text message.";
     }
 
     if (!finalText) {
@@ -144,7 +132,8 @@ export async function POST(request: Request) {
     console.log("AI Response for WhatsApp:", aiResponse);
 
     // 5. Logical Branching
-    let replyMessage = aiResponse.reply_message;
+    // (replyMessage is already initialized above)
+    replyMessage = aiResponse.reply_message;
 
     if (aiResponse.intent === 'SUGGEST_DOCTOR') {
         const doctor = await prisma.doctor.findFirst({
