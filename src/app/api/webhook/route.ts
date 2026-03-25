@@ -226,9 +226,13 @@ export async function POST(request: Request) {
               data: { lastSuggestedSlots: suggestedSlotsISO } as any
             });
 
-            // If the user just asked for slots or confirmed doc, overwrite the reply to show these slots
-            if (aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.requested_date) {
-                aiResponse.reply_message += `\n\nAvailable slots:\n${availableSlotsContext}\n\nKripya 1 se 5 ke beech koi number bhejein.`;
+            // If the user just asked for slots, confirmed doc, or we are in AWAITING_TIME state, show slots
+            const isAwaitingTime = (patient as any).conversationState === 'AWAITING_TIME' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME';
+            
+            if (isAwaitingTime || aiResponse.requested_date) {
+                if (availableSlotsContext) {
+                    aiResponse.reply_message += `\n\nAb niche diye gaye slots mein se koi choose karein:\n${availableSlotsContext}\n\nKripya 1 se 5 ke beech koi number bhejein.`;
+                }
             }
         }
     }
