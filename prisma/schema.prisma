@@ -13,6 +13,7 @@ model Patient {
   conversationState     String        @default("IDLE") // IDLE, DOCTOR_SUGGESTED, AWAITING_CONFIRMATION
   lastSuggestedDoctorId String?
   lastSymptoms          String?
+  lastProposedTime      DateTime?
   createdAt             DateTime      @default(now())
   appointments          Appointment[]
 }
