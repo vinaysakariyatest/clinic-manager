@@ -165,13 +165,13 @@ export async function POST(request: Request) {
                 conversationState: 'DOCTOR_SUGGESTED',
                 lastSuggestedDoctorId: targetDoctorId,
                 lastSymptoms: aiResponse.symptoms || finalText
-              }
+              } as any
             });
         }
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && (patient as any).conversationState === 'DOCTOR_SUGGESTED') {
         await prisma.patient.update({
           where: { id: patient.id },
-          data: { conversationState: 'AWAITING_TIME' }
+          data: { conversationState: 'AWAITING_TIME' } as any
         });
     } else if (aiResponse.intent === 'PROVIDE_TIME' || (aiResponse.time_preference && (patient as any).conversationState === 'AWAITING_TIME')) {
         if (aiResponse.time_preference && (patient as any).lastSuggestedDoctorId) {
@@ -199,7 +199,7 @@ export async function POST(request: Request) {
                   data: {
                     conversationState: 'AWAITING_CONFIRMATION',
                     lastProposedTime: proposedTime
-                  }
+                  } as any
                 });
                 replyMessage = `Theek hai, ${proposedTime.toLocaleString()} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
             }
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
               lastSuggestedDoctorId: null,
               lastSymptoms: null,
               lastProposedTime: null
-            }
+            } as any
           });
           replyMessage = "Aapka appointment successfully book ho gaya hai! See you soon.";
         }
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
             lastSuggestedDoctorId: null,
             lastSymptoms: null,
             lastProposedTime: null
-          }
+          } as any
         });
     }
 
