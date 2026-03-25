@@ -45,12 +45,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // 1. HANDLE NUMERIC PICK (1-5)
+    // 1. HANDLE NUMERIC PICK (1-X)
     const currentState = (patient as any).conversationState;
     const canPickSlot = ['AWAITING_TIME', 'DOCTOR_SUGGESTED','AWAITING_CONFIRMATION'].includes(currentState);
     const canPickCancel = currentState === 'AWAITING_CANCEL_PICK';
 
-    if ((canPickSlot || canPickCancel) && /^[1-5]$/.test(finalText)) {
+    if ((canPickSlot || canPickCancel) && /^\d+$/.test(finalText)) {
         const index = parseInt(finalText) - 1;
         const items = (patient as any).lastSuggestedSlots as string[];
         
@@ -283,18 +283,25 @@ export async function POST(request: Request) {
     let slotText = "";
     if (nextState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date) {
         if (finalDocId) {
-            const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000; let checkTime = new Date(now.getTime());
+            const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
+            let checkTime = new Date(now.getTime());
             if (aiResponse.requested_date) { const d = new Date(aiResponse.requested_date); if (d > now) checkTime = d; }
             const currentIST = new Date(checkTime.getTime() + istOffset);
             if (currentIST.getUTCHours() < 9) { currentIST.setUTCHours(9, 0, 0, 0); checkTime = new Date(currentIST.getTime() - istOffset); }
+            else if (currentIST.getUTCHours() >= 18) {
+                const nextD = new Date(currentIST.getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); 
+                checkTime = new Date(nextD.getTime() - istOffset);
+            }
             else { checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0); }
-
 
             const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
             const bookedByPatient = (await prisma.appointment.findMany({ where: { patientId: patient.id, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
             const booked = Array.from(new Set([...bookedByDoctor, ...bookedByPatient]));
+            
             const display: string[] = []; const isoSlots: string[] = [];
-            while (display.length < 5) {
+            const dateStr = new Date(checkTime.getTime() + istOffset).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "long" });
+
+            while (display.length < 20) {
                 const hIST = new Date(checkTime.getTime() + istOffset).getUTCHours();
                 if (hIST >= 9 && hIST < 18) {
                     if (!booked.includes(checkTime.getTime())) {
@@ -302,13 +309,13 @@ export async function POST(request: Request) {
                         isoSlots.push(checkTime.toISOString());
                     }
                 } else if (hIST >= 18) {
-                    if (display.length > 0) break; 
+                    if (display.length > 0) break; // Found some slots today, STOP here
                     const nextD = new Date(new Date(checkTime.getTime() + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
             }
             if (display.length > 0) {
-                slotText = `\n\nSlots:\n${display.join('\n')}\n\nReply number (1-5).`;
+                slotText = `\n\n📅 *Date: ${dateStr}*\nSlots:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patient.update({ where: { id: patient.id }, data: { lastSuggestedSlots: isoSlots } as any });
             }
         }
