@@ -94,6 +94,58 @@ export async function POST(request: Request) {
     const doctors = await prisma.doctor.findMany();
     const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
 
+    // 4.1 SLOT SUGGESTION LOGIC (Only if DOCTOR_SUGGESTED or AWAITING_TIME)
+    let availableSlotsContext = "";
+    if ((patient as any).lastSuggestedDoctorId && (['DOCTOR_SUGGESTED', 'AWAITING_TIME'].includes((patient as any).conversationState))) {
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        
+        const existingDocs = await prisma.appointment.findMany({
+          where: {
+            doctorId: (patient as any).lastSuggestedDoctorId,
+            date: { gte: now, lte: new Date(now.getTime() + 48 * 60 * 60 * 1000) },
+            status: { not: 'CANCELLED' }
+          }
+        });
+
+        const bookedTimes = existingDocs.map(d => d.date.getTime());
+        const suggestedSlots: string[] = [];
+        
+        // Check next 2 days
+        for (let i = 0; i < 2; i++) {
+          const checkDate = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+          const year = checkDate.getFullYear();
+          const month = checkDate.getMonth();
+          const day = checkDate.getDate();
+
+          // Working hours 9 AM to 6 PM IST
+          for (let hour = 9; hour < 18; hour++) {
+            for (let min of [0, 30]) {
+              const slot = new Date(year, month, day, hour, min);
+              // Adjust for IST shift if server is UTC during Date() creation? 
+              // Better use direct UTC construction or fix offset.
+              // For simplicity, we create a date then check if it's in the past.
+              const istSlot = new Date(slot.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+              
+              if (istSlot > now && !bookedTimes.includes(istSlot.getTime())) {
+                suggestedSlots.push(istSlot.toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  month: "short",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true
+                }));
+              }
+              if (suggestedSlots.length >= 5) break;
+            }
+            if (suggestedSlots.length >= 5) break;
+          }
+          if (suggestedSlots.length >= 5) break;
+        }
+        availableSlotsContext = suggestedSlots.join(", ");
+    }
+
     const { createMistral } = await import('@ai-sdk/mistral');
     const mistral = createMistral({
       apiKey: mistralKey
@@ -115,13 +167,13 @@ export async function POST(request: Request) {
       Message: "${finalText}"
       Current State: ${(patient as any).conversationState}
       Last Suggested Doctor ID: ${(patient as any).lastSuggestedDoctorId || 'None'}
-      Last Proposed Time: ${(patient as any).lastProposedTime?.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}) || 'None'}
       Available Doctors: ${doctorsContext}
+      Suggested Available Slots for this doctor: ${availableSlotsContext || 'Calculate once doctor is confirmed'}
       
       Flow Instructions:
       1. If state is IDLE and patient mentions symptoms/booking -> intent: SUGGEST_DOCTOR. Suggest a doctor.
-      2. If state is DOCTOR_SUGGESTED and patient confirms (yes/ok) -> intent: CONFIRM_DOCTOR. Ask for date/time.
-      3. If state is AWAITING_TIME and patient provides time -> intent: PROVIDE_TIME. Extract time in time_preference.
+      2. If state is DOCTOR_SUGGESTED and patient confirms (yes/ok) -> intent: CONFIRM_DOCTOR. Recommend specific available slots from "Suggested Available Slots".
+      3. If state is AWAITING_TIME and patient provides time -> intent: PROVIDE_TIME. Extract time in time_preference. If time is invalid/past, ask again and show slots.
       4. If state is AWAITING_CONFIRMATION and patient confirms -> intent: BOOK_APPOINTMENT.
       5. If patient cancels or says no -> intent: CANCEL_APPOINTMENT.
       
@@ -166,7 +218,11 @@ export async function POST(request: Request) {
             }
             const proposedTime = new Date(proposedTimeStr);
             
-            // Availability Check (30 min window)
+            // Past Date Blocking
+            if (proposedTime < new Date()) {
+                replyMessage = `I'm sorry, aap bite hue waqt (past time) ka appointment nahi le sakte. Kripya koi future time choose karein. Available slots: ${availableSlotsContext}`;
+            } else {
+                // Availability Check (30 min window)
             const thirtyMins = 30 * 60 * 1000;
             const existingAppointment = await prisma.appointment.findFirst({
               where: {
