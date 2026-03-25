@@ -95,10 +95,11 @@ export async function POST(request: Request) {
     const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
 
     // 4.1 NUMERIC SELECTION HANDLING
-    if ((patient as any).conversationState === 'AWAITING_TIME' && /^[1-5]$/.test(finalText || "")) {
+    const isReadyForSlot = ['AWAITING_TIME', 'DOCTOR_SUGGESTED'].includes((patient as any).conversationState);
+    if (isReadyForSlot && /^[1-5]$/.test(finalText || "")) {
         const index = parseInt(finalText!) - 1;
         const slots = (patient as any).lastSuggestedSlots as string[];
-        if (slots && slots[index]) {
+        if (slots && slots[index] && (patient as any).lastSuggestedDoctorId) {
             const chosenTime = new Date(slots[index]);
             await prisma.patient.update({
               where: { id: patient.id },
@@ -112,7 +113,10 @@ export async function POST(request: Request) {
               dateStyle: "medium",
               timeStyle: "short"
             });
-            const msg = `Theek hai, aapne option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du?`;
+            
+            // Get doctor name for the message
+            const doc = await prisma.doctor.findUnique({ where: { id: (patient as any).lastSuggestedDoctorId } });
+            const msg = `Theek hai, aapne ${doc?.name || "Doctor"} ke liye option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du? (HAAN/YES)`;
             await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, msg);
             return NextResponse.json({ success: true }, { status: 200 });
         }
@@ -236,13 +240,11 @@ export async function POST(request: Request) {
               data: { lastSuggestedSlots: suggestedSlotsISO } as any
             });
 
-            // If the user just asked for slots, confirmed doc, or we are in AWAITING_TIME state, show slots
-            const isAwaitingTime = (patient as any).conversationState === 'AWAITING_TIME' || aiResponse.intent === 'CONFIRM_DOCTOR' || aiResponse.intent === 'PROVIDE_TIME';
+            // SHOW SLOTS ONLY IF STATE IS AWAITING_TIME or AI requests it
+            const shouldShowSlots = (patient as any).conversationState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date;
             
-            if (isAwaitingTime || aiResponse.requested_date) {
-                if (availableSlotsContext) {
-                    aiResponse.reply_message += `\n\nAb niche diye gaye slots mein se koi choose karein:\n${availableSlotsContext}\n\nKripya 1 se 5 ke beech koi number bhejein.`;
-                }
+            if (shouldShowSlots && availableSlotsContext) {
+                aiResponse.reply_message += `\n\nAb niche diye gaye slots mein se koi ek select karein:\n${availableSlotsContext}\n\nKripya 1 se 5 ke beech koi number bhejein.`;
             }
         }
     }
