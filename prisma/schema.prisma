@@ -7,11 +7,14 @@ datasource db {
 }
 
 model Patient {
-  id           String        @id @default(uuid())
-  phone        String        @unique
-  name         String?
-  createdAt    DateTime      @default(now())
-  appointments Appointment[]
+  id                    String        @id @default(uuid())
+  phone                 String        @unique
+  name                  String?
+  conversationState     String        @default("IDLE") // IDLE, DOCTOR_SUGGESTED, AWAITING_CONFIRMATION
+  lastSuggestedDoctorId String?
+  lastSymptoms          String?
+  createdAt             DateTime      @default(now())
+  appointments          Appointment[]
 }
 
 model Doctor {

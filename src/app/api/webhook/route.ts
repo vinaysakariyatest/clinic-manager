@@ -108,6 +108,10 @@ export async function POST(request: Request) {
       });
     }
 
+    // Fetch all available doctors for context
+    const doctors = await prisma.doctor.findMany();
+    const doctorsContext = doctors.map(d => `${d.name} (${d.specialization})`).join(', ');
+
     const google = createGoogleGenerativeAI({
       apiKey: apiKey
     });
@@ -115,34 +119,83 @@ export async function POST(request: Request) {
     const { object: aiResponse } = await generateObject({
       model: google('gemini-2.5-flash'),
       schema: z.object({
-        intent: z.enum(['BOOK_APPOINTMENT', 'GENERAL_INQUIRY', 'CANCEL_APPOINTMENT']),
+        intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT']),
         symptoms: z.string().optional().describe('Patient symptoms if mentioned'),
-        department: z.string().optional().describe('Recommended medical department (e.g. Cardiology, General, Skin)'),
+        suggested_doctor: z.string().optional().describe('Name of the suggested doctor among the available doctors'),
         time_preference: z.string().optional().describe('Preferred time mentioned by patient in ISO format if possible, otherwise keep empty'),
         reply_message: z.string().describe('Friendly reply in Hinglish. Be helpful and professional. Max 2 sentences.'),
       }),
-      prompt: `You are clinical assistant "ClinicManager". Analyze patient message and recommend steps.
-      Context: Patient Name: ${patient.name}, Message: "${finalText}"`,
+      prompt: `You are clinical assistant "ClinicManager". Analyze patient message and determine next steps.
+      Context: Patient Name: ${patient.name}, Message: "${finalText}"
+      Current Conversation State: ${patient.conversationState}
+      Last Suggested Doctor ID: ${patient.lastSuggestedDoctorId || 'None'}
+      Last Symptoms Mentioned: ${patient.lastSymptoms || 'None'}
+      Available Doctors: ${doctorsContext}
+      
+      Instructions:
+      - If state is IDLE and patient mentions symptoms or wants to book, suggest a doctor and ask to confirm (intent: SUGGEST_DOCTOR). Do NOT book the appointment yet.
+      - If state is DOCTOR_SUGGESTED and patient confirms ("yes", "ok", "haan", "sure", "kardo"), book the appointment (intent: BOOK_APPOINTMENT). Note: confirm message must correspond to booking intent.
+      - If state is DOCTOR_SUGGESTED and patient says "no" or asks for another, suggest someone else or say ok (intent: GENERAL_REPLY).
+      - If patient is just greeting or asking general questions, just reply normally (intent: GENERAL_REPLY).
+      - Always reply in Hinglish. Example reply for suggestion: "Aapke symptoms ke liye Dr. Sharma best rahenge. Kya main kal ka appointment book kar du?"`,
     });
 
     console.log("AI Response for WhatsApp:", aiResponse);
 
     // 5. Logical Branching
-    if (aiResponse.intent === 'BOOK_APPOINTMENT') {
+    if (aiResponse.intent === 'SUGGEST_DOCTOR') {
         const doctor = await prisma.doctor.findFirst({
-          where: { specialization: { contains: aiResponse.department || "General", mode: 'insensitive' } }
+          where: { name: { contains: aiResponse.suggested_doctor || "", mode: 'insensitive' } }
         });
+        
+        // If doctor found, store context. Otherwise fallback to first doctor
+        let targetDoctorId = doctor?.id;
+        if (!targetDoctorId && doctors.length > 0) {
+            targetDoctorId = doctors[0].id;
+        }
 
-        if (doctor) {
+        if (targetDoctorId) {
+            await prisma.patient.update({
+              where: { id: patient.id },
+              data: {
+                conversationState: 'DOCTOR_SUGGESTED',
+                lastSuggestedDoctorId: targetDoctorId,
+                lastSymptoms: aiResponse.symptoms || finalText
+              }
+            });
+        }
+    } else if (aiResponse.intent === 'BOOK_APPOINTMENT' && patient.conversationState === 'DOCTOR_SUGGESTED') {
+        if (patient.lastSuggestedDoctorId) {
           await prisma.appointment.create({
             data: {
               patientId: patient.id,
-              doctorId: doctor.id,
+              doctorId: patient.lastSuggestedDoctorId,
               date: aiResponse.time_preference ? new Date(aiResponse.time_preference) : new Date(new Date().setHours(new Date().getHours() + 24)),
-              symptoms: aiResponse.symptoms || finalText,
+              symptoms: patient.lastSymptoms || finalText,
               status: "PENDING"
             }
           });
+
+          await prisma.patient.update({
+            where: { id: patient.id },
+            data: {
+              conversationState: 'IDLE',
+              lastSuggestedDoctorId: null,
+              lastSymptoms: null
+            }
+          });
+        }
+    } else if (aiResponse.intent === 'GENERAL_REPLY' || aiResponse.intent === 'CANCEL_APPOINTMENT') {
+        // Reset state if they are chatting something else
+        if (patient.conversationState !== 'IDLE') {
+           await prisma.patient.update({
+              where: { id: patient.id },
+              data: {
+                conversationState: 'IDLE',
+                lastSuggestedDoctorId: null,
+                lastSymptoms: null
+              }
+            });
         }
     }
 
