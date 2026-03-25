@@ -59,7 +59,7 @@ export async function POST(request: Request) {
             const formattedTime = chosenTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
             const doc = await prisma.doctor.findUnique({ where: { id: (patient as any).lastSuggestedDoctorId } });
             
-            const msg = `Theek hai, aapne ${doc?.name || "Doctor"} ke liye option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du? (HAAN/YES)`;
+            const msg = `Theek hai, aapne ${doc?.name || "Doctor"} ke liye option ${finalText} choose kiya hai: ${formattedTime}. Kya main ye appointment confirm kar du?`;
             await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, msg);
             return NextResponse.json({ success: true });
         }
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       Message: "${finalText}"
       Available: ${doctorsContext}
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR.
-      - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR.
+      - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Always stick to the Last Doctor: ${lastDoctorName}).
       - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
       - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT.
       - If user asks to see their booking/appointment -> VIEW_APPOINTMENTS.
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
 
     if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && aiResponse.suggested_doctor)) {
         const doc = doctors.find(d => d.name.toLowerCase().includes(aiResponse.suggested_doctor?.toLowerCase() || ""));
-        finalDocId = doc?.id || doctors[0]?.id;
+        if (doc) finalDocId = doc.id;
         nextState = 'DOCTOR_SUGGESTED';
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
         nextState = 'AWAITING_TIME';
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
         if (futureApps.length > 0) {
             const list = futureApps.map(a => {
                 const d = new Date(a.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-                return `• Dr. ${a.doctor.name} - ${d}`;
+                return `• ${a.doctor.name} - ${d}`;
             }).join('\n');
             aiResponse.reply_message = `Aapke upcoming appointments ye hain:\n\n${list}`;
         } else {
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
         const isToday = !aiResponse.requested_date || new Date(aiResponse.requested_date).toDateString() === now.toDateString();
         if (isToday) {
             const timeStr = existingToday.date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
-            aiResponse.reply_message = `Aapka aaj ka appointment already confirmed hai: Dr. ${existingToday.doctor?.name} ke saath ${timeStr} baje. Ek hi din mein do appointments allow nahi hain. Kripya naya message karke kisi aur date ka check karein.`;
+            aiResponse.reply_message = `Aapka aaj ka appointment already confirmed hai: ${existingToday.doctor?.name} ke saath ${timeStr} baje. Ek hi din mein do appointments allow nahi hain. Kripya naya message karke kisi aur date ka check karein.`;
             nextState = 'IDLE';
         }
     }
