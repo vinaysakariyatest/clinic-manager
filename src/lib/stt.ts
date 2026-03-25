@@ -6,7 +6,7 @@ export async function speechToText(url: string) {
     if (!apiKey) throw new Error("AI API Key (Gemini) is not defined in environment variables (AI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY)");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
     // Download audio
     const audioResponse = await fetch(url);
