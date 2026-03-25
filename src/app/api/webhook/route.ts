@@ -131,6 +131,13 @@ export async function POST(request: Request) {
     // OR just pass the next 7 days of availability summary.
     // Let's refine the prompt and the logic.
 
+    // Get last suggested doctor object for better context
+    let lastDoctorName = "None";
+    if ((patient as any).lastSuggestedDoctorId) {
+        const lastDoc = await prisma.doctor.findUnique({ where: { id: (patient as any).lastSuggestedDoctorId } });
+        lastDoctorName = lastDoc?.name || "None";
+    }
+
     const { object: aiResponse } = await generateObject({
       model: mistral('mistral-medium-latest'), 
       schema: z.object({
@@ -146,11 +153,12 @@ export async function POST(request: Request) {
       Patient: ${patient.name}
       Message: "${finalText}"
       State: ${(patient as any).conversationState}
+      Last Suggested Doctor: ${lastDoctorName}
       Available Doctors: ${doctorsContext}
       
       Instructions:
-      1. If user mentions symptoms, use SUGGEST_DOCTOR. (ONLY suggest ONE doctor).
-      2. If user confirms a doctor, use CONFIRM_DOCTOR. 
+      1. If state is IDLE and patient mentions symptoms, use SUGGEST_DOCTOR. (ONLY suggest ONE best doctor).
+      2. If state is DOCTOR_SUGGESTED and patient confirms, use CONFIRM_DOCTOR. **DO NOT CHANGE THE DOCTOR (Stay with ${lastDoctorName})**.
       3. If user provides/asks for time, use PROVIDE_TIME or extract requested_date.
       4. DO NOT list available slots yourself. The system will append them automatically.
       Always reply in Hinglish. Be concise.`,
