@@ -289,10 +289,10 @@ export async function POST(request: Request) {
             if (currentIST.getUTCHours() < 9) { currentIST.setUTCHours(9, 0, 0, 0); checkTime = new Date(currentIST.getTime() - istOffset); }
             else { checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0); }
 
+
             const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
             const bookedByPatient = (await prisma.appointment.findMany({ where: { patientId: patient.id, date: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
             const booked = Array.from(new Set([...bookedByDoctor, ...bookedByPatient]));
-            
             const display: string[] = []; const isoSlots: string[] = [];
             while (display.length < 5) {
                 const hIST = new Date(checkTime.getTime() + istOffset).getUTCHours();
@@ -302,13 +302,13 @@ export async function POST(request: Request) {
                         isoSlots.push(checkTime.toISOString());
                     }
                 } else if (hIST >= 18) {
-                    if (display.length > 0) break; // STOP here if we found some slots for today
+                    if (display.length > 0) break; 
                     const nextD = new Date(new Date(checkTime.getTime() + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
             }
             if (display.length > 0) {
-                slotText = `\n\nSlots:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
+                slotText = `\n\nSlots:\n${display.join('\n')}\n\nReply number (1-5).`;
                 await prisma.patient.update({ where: { id: patient.id }, data: { lastSuggestedSlots: isoSlots } as any });
             }
         }
