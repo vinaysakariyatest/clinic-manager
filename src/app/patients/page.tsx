@@ -21,6 +21,14 @@ export default async function PatientsPage({
   const patients = await prisma.patient.findMany({
     where,
     include: {
+      appointments: {
+        include: {
+          doctor: true,
+        },
+        orderBy: {
+          date: "desc",
+        },
+      },
       _count: {
         select: { appointments: true },
       },

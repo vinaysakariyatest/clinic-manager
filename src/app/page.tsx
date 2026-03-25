@@ -6,8 +6,25 @@ import { AppointmentsList } from "@/components/dashboard/appointments-list";
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
-  // Fetch real data from Supabase
+  // Calculate Today (Asia/Kolkata) range in UTC
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(Date.now() + istOffset);
+  
+  const startOfDayIST = new Date(nowIST);
+  startOfDayIST.setUTCHours(0, 0, 0, 0);
+  const startOfToday = new Date(startOfDayIST.getTime() - istOffset);
+
+  const endOfDayIST = new Date(nowIST);
+  endOfDayIST.setUTCHours(23, 59, 59, 999);
+  const endOfToday = new Date(endOfDayIST.getTime() - istOffset);
+
   const appointments = await prisma.appointment.findMany({
+    where: {
+      date: {
+        gte: startOfToday,
+        lte: endOfToday,
+      },
+    },
     include: { patient: true, doctor: true },
     orderBy: { date: 'asc' }
   });

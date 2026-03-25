@@ -283,6 +283,11 @@ export async function POST(request: Request) {
     let slotText = "";
     if (nextState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date) {
         if (finalDocId) {
+            // Fetch Clinic Config for Hours
+            const config = (await prisma.clinicConfig.findUnique({ where: { id: 'default' } })) || { openTime: 9, closeTime: 18 };
+            const OPEN_H = config.openTime;
+            const CLOSE_H = config.closeTime;
+
             const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
             const nowIST = new Date(now.getTime() + istOffset);
             let checkTime = new Date(now.getTime());
@@ -294,7 +299,7 @@ export async function POST(request: Request) {
                     if (d > now) {
                         checkTime = d;
                         const targetIST = new Date(checkTime.getTime() + istOffset);
-                        targetIST.setUTCHours(9, 0, 0, 0);
+                        targetIST.setUTCHours(OPEN_H, 0, 0, 0);
                         checkTime = new Date(targetIST.getTime() - istOffset);
                     }
                 }
@@ -302,12 +307,12 @@ export async function POST(request: Request) {
 
             // Initialization final polish
             const currentIST = new Date(checkTime.getTime() + istOffset);
-            if (currentIST.getUTCHours() < 9) {
-                currentIST.setUTCHours(9, 0, 0, 0);
+            if (currentIST.getUTCHours() < OPEN_H) {
+                currentIST.setUTCHours(OPEN_H, 0, 0, 0);
                 checkTime = new Date(currentIST.getTime() - istOffset);
-            } else if (currentIST.getUTCHours() >= 18) {
+            } else if (currentIST.getUTCHours() >= CLOSE_H) {
                 currentIST.setDate(currentIST.getDate() + 1);
-                currentIST.setUTCHours(9, 0, 0, 0);
+                currentIST.setUTCHours(OPEN_H, 0, 0, 0);
                 checkTime = new Date(currentIST.getTime() - istOffset);
             } else {
                 checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0);
@@ -322,14 +327,14 @@ export async function POST(request: Request) {
             while (display.length < 5) {
                 const t = checkTime.getTime();
                 const hIST = new Date(t + istOffset).getUTCHours();
-                if (hIST >= 9 && hIST < 18) {
+                if (hIST >= OPEN_H && hIST < CLOSE_H) {
                     if (!booked.includes(t) && t >= (now.getTime() - 60000)) { 
                         display.push(`${display.length + 1}. ${checkTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
                         isoSlots.push(checkTime.toISOString());
                     }
-                } else if (hIST >= 18) {
+                } else if (hIST >= CLOSE_H) {
                     if (display.length > 0) break; // Found some slots today, STOP here
-                    const nextD = new Date(new Date(t + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(9,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
+                    const nextD = new Date(new Date(t + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(OPEN_H,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
                 checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);

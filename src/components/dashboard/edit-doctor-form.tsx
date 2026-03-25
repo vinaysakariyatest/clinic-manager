@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateDoctor } from "@/app/settings/actions";
 import { useFormStatus } from "react-dom";
+import { toast } from "sonner";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -29,9 +30,11 @@ export function EditDoctorForm({
     try {
       setError(null);
       await updateDoctor(doctor.id, formData);
+      toast.success("Doctor information updated!");
       onSuccess();
     } catch (e: any) {
       setError(e.message || "Something went wrong");
+      toast.error(e.message || "Failed to update doctor.");
     }
   }
 

@@ -1,46 +1,82 @@
-'use server';
+"use server";
 
 import prisma from "@/lib/prisma";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { revalidatePath } from "next/cache";
 
 export async function createAppointment(formData: FormData) {
   const patientPhone = formData.get('patientPhone') as string;
+  const patientName = formData.get('patientName') as string;
   const doctorId = formData.get('doctorId') as string;
-  const date = formData.get('date') as string;
+  const dateStr = formData.get('date') as string;
   const symptoms = formData.get('symptoms') as string;
 
-  if (!patientPhone || !doctorId || !date) {
-    throw new Error("Patient phone, doctor, and date are required");
+  if (!patientPhone || !doctorId || !dateStr) {
+    throw new Error('Missing required fields');
   }
 
   // Find or create patient
   let patient = await prisma.patient.findUnique({
-    where: { phone: patientPhone },
+    where: { phone: patientPhone }
   });
 
   if (!patient) {
     patient = await prisma.patient.create({
       data: {
         phone: patientPhone,
-        name: formData.get('patientName') as string || "New Patient",
-      },
+        name: patientName || "Anonymous",
+      }
+    });
+  } else if (patientName && !patient.name) {
+    await prisma.patient.update({
+      where: { id: patient.id },
+      data: { name: patientName }
     });
   }
 
-  // Create appointment
-  const id = 'apt-' + Math.random().toString(36).substring(2, 9);
-  
   await prisma.appointment.create({
     data: {
-      id,
       patientId: patient.id,
-      doctorId: doctorId,
-      date: new Date(date),
-      symptoms: symptoms || "Regular Checkup",
+      doctorId,
+      date: new Date(dateStr),
       status: "CONFIRMED",
-    },
+      symptoms: symptoms || "Regular Checkup",
+    }
   });
 
   revalidatePath('/appointments');
+  revalidatePath('/patients');
   revalidatePath('/');
+}
+
+export async function cancelAppointment(appointmentId: string, reason: string) {
+  try {
+    const appointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: "CANCELLED" },
+      include: {
+        patient: true,
+        doctor: true,
+      },
+    });
+
+    const formattedTime = new Date(appointment.date).toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      dateStyle: "long",
+      timeStyle: "short",
+    });
+
+    const message = `🔔 *Appointment Cancellation Notification*\n\nNamaste ${appointment.patient.name || 'Patient'},\n\nHum kshama chahte hain, lekin aapka aane wala appointment *cancel* kar diya gaya hai.\n\n📋 *Details:*\n🗓 *Date & Time:* ${formattedTime}\n👨‍⚕️ *Doctor:* ${appointment.doctor.name}\n❌ *Reason:* ${reason || "Operational Reasons"}\n\nAap naya appointment WhatsApp ya dashboard ke madhyam se book kar sakte hain.\n\nDhanyavaad,\n*ClinicManager Team*`;
+
+    await sendWhatsAppMessage("11za-channel", appointment.patient.phone, message);
+
+    revalidatePath("/appointments");
+    revalidatePath("/patients");
+    revalidatePath("/");
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Cancellation Action Error:", error);
+    return { success: false, error: "Something went wrong" };
+  }
 }

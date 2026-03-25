@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addDoctor } from "@/app/settings/actions";
 import { useFormStatus } from "react-dom";
+import { toast } from "sonner";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -23,9 +24,11 @@ export function AddDoctorForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       setError(null);
       await addDoctor(formData);
+      toast.success("Doctor added successfully!");
       onSuccess();
     } catch (e: any) {
       setError(e.message || "Something went wrong");
+      toast.error(e.message || "Failed to add doctor.");
     }
   }
 

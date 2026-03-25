@@ -54,7 +54,22 @@ export async function deleteDoctor(id: string) {
   }
 
   await prisma.doctor.delete({
-    where: { id },
+    where: { id: id },
+  });
+
+  revalidatePath('/settings');
+}
+
+export async function updateClinicConfig(formData: FormData) {
+  const name = formData.get('name') as string;
+  const address = formData.get('address') as string;
+  const openTime = parseInt(formData.get('openTime') as string);
+  const closeTime = parseInt(formData.get('closeTime') as string);
+
+  await prisma.clinicConfig.upsert({
+    where: { id: 'default' },
+    update: { name, address, openTime, closeTime },
+    create: { id: 'default', name, address, openTime, closeTime }
   });
 
   revalidatePath('/settings');

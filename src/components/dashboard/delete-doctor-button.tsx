@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { deleteDoctor } from "@/app/settings/actions";
+import { toast } from "sonner";
 
 export function DeleteDoctorButton({ id }: { id: string }) {
   const [loading, setLoading] = useState(false);
@@ -14,8 +15,9 @@ export function DeleteDoctorButton({ id }: { id: string }) {
     try {
       setLoading(true);
       await deleteDoctor(id);
+      toast.success("Doctor deleted successfully.");
     } catch (e: any) {
-      alert(e.message || "Failed to delete doctor");
+      toast.error(e.message || "Failed to delete doctor.");
     } finally {
       setLoading(false);
     }

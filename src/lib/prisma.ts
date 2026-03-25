@@ -11,7 +11,7 @@ const prismaClientSingleton = () => {
   }
 
   const pool = new pg.Pool({ connectionString })
-  const adapter = new PrismaPg(pool) as any
+  const adapter = new PrismaPg(pool as any) as any
   
   return new PrismaClient({ adapter })
 }
@@ -24,4 +24,5 @@ const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
 
 export default prisma
 
-if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma
+if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma;
+// Cache-bust: 2026-03-25T18:41:45

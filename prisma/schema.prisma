@@ -39,6 +39,15 @@ model Appointment {
   doctor  Doctor  @relation(fields: [doctorId], references: [id])
 }
 
+model ClinicConfig {
+  id        String   @id @default("default")
+  name      String   @default("City Medical Center")
+  address   String   @default("123 Main St, New Delhi")
+  openTime  Int      @default(9)  // 24h format
+  closeTime Int      @default(18) // 24h format
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
 model WhatsAppMessage {
   id          String   @id @default(uuid())
   messageId   String   @unique
