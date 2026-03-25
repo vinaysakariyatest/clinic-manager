@@ -252,6 +252,7 @@ export async function POST(request: Request) {
                 });
                 replyMessage = `Theek hai, ${formattedTime} par slot khali hai. Kya main aapka appointment pakka (confirm) kar du?`;
             }
+          }
         } else {
             replyMessage = "Kripya karke sahi date aur time batayein.";
         }
