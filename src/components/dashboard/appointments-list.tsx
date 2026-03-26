@@ -68,7 +68,7 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
                   : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
               }`}
             >
-              {appointment.status.replace('_', ' ')}
+              {appointment.status === "NO_SHOW" ? "MISSED" : appointment.status.replace('_', ' ')}
             </div>
           </div>
 
@@ -92,7 +92,7 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
                 className="flex-1 h-9 text-xs font-semibold bg-white dark:bg-background border-red-200 hover:bg-red-500 hover:text-white dark:border-red-900/50 transition-colors"
                 onClick={() => handleStatusChange(appointment.id, "NO_SHOW")}
               >
-                <X className="h-3.5 w-3.5 mr-1" /> No-Show
+                <X className="h-3.5 w-3.5 mr-1" /> Missed
               </Button>
             </div>
           )}

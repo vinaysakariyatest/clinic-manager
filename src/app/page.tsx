@@ -108,11 +108,11 @@ export default async function Dashboard() {
         </Card>
         <Card className="bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">No-Shows</CardTitle>
+            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">Missed</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.noShow}</div>
-            <p className="text-xs text-muted-foreground mt-1 text-red-600/70">Did not arrive</p>
+            <p className="text-xs text-muted-foreground mt-1 text-red-600/70">Appointments missed</p>
           </CardContent>
         </Card>
         <Card className="bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20">

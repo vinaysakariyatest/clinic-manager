@@ -10,14 +10,20 @@ model Patient {
   id                    String        @id @default(uuid())
   phone                 String        @unique
   name                  String?
+  createdAt             DateTime      @default(now())
+  appointments          Appointment[]
+}
+
+model PatientState {
+  phone                 String        @id
   conversationState     String        @default("IDLE") // IDLE, DOCTOR_SUGGESTED, AWAITING_CONFIRMATION
   lastSuggestedDoctorId String?
   lastSymptoms          String?
   lastProposedTime      DateTime?
   lastSuggestedSlots    String[]      @default([])
-  createdAt             DateTime      @default(now())
-  appointments          Appointment[]
+  updatedAt             DateTime      @default(now()) @updatedAt
 }
+
 
 model Doctor {
   id             String        @id @default(uuid())
