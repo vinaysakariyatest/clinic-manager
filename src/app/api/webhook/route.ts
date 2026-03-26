@@ -221,17 +221,30 @@ export async function POST(request: Request) {
             }
         }
 
-        if (!matchFound && (pState.conversationState === 'IDLE' || pState.conversationState === 'RESTART')) {
-            // NO MATCH FOUND for the suggested specialization/doctor and it's a new request
+        if (!matchFound) {
+            // NO MATCH FOUND for the suggested specialization/doctor
             const body = `Maaf kijiye, hamare clinic par abhi *${aiResponse.specialization || aiResponse.suggested_doctor || 'aapki requirement'}* ke liye specialist doctor available nahi hain. Kripya kisi aur problem ke liye slots dekhein ya hamare reception par contact karein. धन्यवाद!`;
+            
+            // CLEAR state to avoid fallbacks to old doctors
+            await prisma.patientState.update({
+                where: { phone },
+                data: { conversationState: 'IDLE', lastSuggestedDoctorId: null }
+            });
+
             await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
             return NextResponse.json({ success: true });
-        } else if (matchFound) {
+        } else {
             nextState = 'DOCTOR_SUGGESTED';
         }
-    } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
+    } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && pState.conversationState === 'DOCTOR_SUGGESTED') {
+        const docId = finalDocId || pState.lastSuggestedDoctorId;
+        if (!docId) {
+             const body = "Pehle kripya apni problem batayen taaki hum sahi doctor suggest kar saken.";
+             await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
+             return NextResponse.json({ success: true });
+        }
         nextState = 'AWAITING_TIME';
-        aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
+        aiResponse.reply_message = `${getDocDisplay(docId)} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
     } else if ((aiResponse.intent === 'BOOK_APPOINTMENT' || (isConfirming && nextState === 'AWAITING_CONFIRMATION')) && nextState === 'AWAITING_CONFIRMATION') {
         const doc = doctors.find(d => d.id === finalDocId);
         const config = await prisma.clinicConfig.findUnique({ where: { id: 'default' } });
