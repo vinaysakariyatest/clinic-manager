@@ -371,21 +371,29 @@ export async function POST(request: Request) {
             
             const display: string[] = []; const isoSlots: string[] = [];
             let loops = 0;
-            while (display.length < 5 && loops < 100) {
+            const targetDay = new Date(checkTime.getTime() + istOffset).getUTCDate();
+
+            while (loops < 100) {
                 loops++;
                 const t = checkTime.getTime();
                 const dIST = new Date(t + istOffset);
                 const hIST = dIST.getUTCHours();
                 const dayOfWeek = dIST.getUTCDay(); // 0 is Sunday
                 
+                // If we've crossed into the next day, stop generating
+                if (dIST.getUTCDate() !== targetDay) break;
+
                 const dateKey = `${dIST.getUTCFullYear()}-${dIST.getUTCMonth()}-${dIST.getUTCDate()}`;
                 const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(dayOfWeek);
 
                 if (isHoliday) {
-                    // Skip to next day's opening time
+                    // Skip to next day if it's a holiday (requested date was a holiday)
                     dIST.setUTCHours(OPEN_H, 0, 0, 0);
                     const nextStart = new Date(dIST.getTime() + 24 * 60 * 60 * 1000 - istOffset);
                     checkTime = nextStart;
+                    // Reset targetDay because we changed day
+                    const newTarget = new Date(checkTime.getTime() + istOffset).getUTCDate();
+                    if (loops > 1) break; // If we already started, don't jump to next day
                     continue;
                 }
 
@@ -395,14 +403,14 @@ export async function POST(request: Request) {
                         isoSlots.push(checkTime.toISOString());
                     }
                 } else if (hIST >= CLOSE_H) {
-                    if (display.length > 0) break;
-                    const nextD = new Date(new Date(t + istOffset).getTime() + 24*60*60*1000); nextD.setUTCHours(OPEN_H,0,0,0); checkTime = new Date(nextD.getTime() - istOffset); continue;
+                    // Reached end of day
+                    break;
                 }
                 checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
                 checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);
             }
             if (display.length > 0) {
-                slotText = `\n\nSlots:\n${display.join('\n')}\n\nReply number (1-5).`;
+                slotText = `\n\nAvailable Slots:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patientState.update({ where: { phone }, data: { lastSuggestedSlots: isoSlots } });
             }
         }
