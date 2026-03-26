@@ -192,18 +192,33 @@ export async function POST(request: Request) {
         aiResponse.intent = 'CONFIRM_DOCTOR';
     }
 
-    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && (suggestedDoctor || suggestedDoctorId))) {
+    if (aiResponse.intent === 'SUGGEST_DOCTOR' || (aiResponse.intent === 'RESTART' && (suggestedDoctor || suggestedDoctorId || aiResponse.specialization))) {
+        let matchFound = false;
         if (suggestedDoctorId) {
             const doc = doctors.find(d => d.id === suggestedDoctorId);
-            if (doc) finalDocId = doc.id;
-        } else if (suggestedDoctor) {
-            const doc = doctors.find(d => 
-                d.name.toLowerCase().includes(suggestedDoctor.toLowerCase()) || 
-                d.specialization.toLowerCase().includes(suggestedDoctor.toLowerCase())
+            if (doc) {
+                finalDocId = doc.id;
+                matchFound = true;
+            }
+        } else if (aiResponse.suggested_doctor || aiResponse.specialization) {
+            const matched = doctors.find(d => 
+                (aiResponse.suggested_doctor && d.name.toLowerCase().includes(aiResponse.suggested_doctor.toLowerCase())) ||
+                (aiResponse.specialization && d.specialization.toLowerCase().includes(aiResponse.specialization.toLowerCase()))
             );
-            if (doc) finalDocId = doc.id;
+            if (matched) {
+                finalDocId = matched.id;
+                matchFound = true;
+            }
         }
-        nextState = 'DOCTOR_SUGGESTED';
+
+        if (!matchFound && (pState.conversationState === 'IDLE' || pState.conversationState === 'RESTART')) {
+            // NO MATCH FOUND for the suggested specialization/doctor and it's a new request
+            const body = `Maaf kijiye, hamare clinic par abhi *${aiResponse.specialization || aiResponse.suggested_doctor || 'aapki requirement'}* ke liye specialist doctor available nahi hain. Kripya kisi aur problem ke liye slots dekhein ya hamare reception par contact karein. धन्यवाद!`;
+            await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
+            return NextResponse.json({ success: true });
+        } else if (matchFound) {
+            nextState = 'DOCTOR_SUGGESTED';
+        }
     } else if (aiResponse.intent === 'CONFIRM_DOCTOR' && nextState === 'DOCTOR_SUGGESTED') {
         nextState = 'AWAITING_TIME';
         aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
