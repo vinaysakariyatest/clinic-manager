@@ -43,7 +43,7 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-h-[600px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
       {initialAppointments.map((appointment) => (
         <div 
           key={appointment.id} 
@@ -64,11 +64,16 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
               }`}>
                 {appointment.patientName.charAt(0).toUpperCase()}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-sm font-bold truncate text-foreground">{appointment.patientName}</p>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-center mb-1 overflow-hidden">
+                  <p 
+                    className="text-sm font-bold truncate text-foreground tracking-tight cursor-help" 
+                    title={appointment.patientName}
+                  >
+                    {appointment.patientName}
+                  </p>
                   <div
-                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                    className={`text-[8px] px-2 py-0.5 rounded flex-shrink-0 font-black uppercase tracking-widest leading-none ${
                       appointment.status === "COMPLETED"
                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                         : appointment.status === "NO_SHOW"
