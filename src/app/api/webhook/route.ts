@@ -152,7 +152,16 @@ export async function POST(request: Request) {
       }),
       prompt: `You are clinical assistant "ClinicManager". Current IST Time: ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})}.
       Patient: ${patientNameForPrompt}, State: ${pState.conversationState}, Last Doctor: ${lastDoctorName}
-      Message: "${finalText}"
+      
+      AVAILABLE DOCTORS:
+      ${doctors.map(d => `- ${d.name} (${d.specialization})`).join('\n')}
+      
+      CRITICAL RULES:
+      1. ONLY suggest a doctor if their specialization DIRECTLY matches the patient's symptoms.
+      2. If you are not sure or we don't have a matching specialist (e.g., Oncology/Cancer, Cardiology), set "intent" to "SUGGEST_DOCTOR" but put the REQUIRED specialization (e.g., "Oncology") in "specialization" so the system can handle unavailability.
+      3. For "cancer", DO NOT suggest a General Surgeon unless specifically asked.
+      
+      Patient Message: "${finalText}"
       Available Doctors: ${doctorsContext}
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR. Use the exact ID from the list below.
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
