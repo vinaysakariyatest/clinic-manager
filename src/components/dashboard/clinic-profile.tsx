@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { updateClinicConfig } from "@/app/settings/actions";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 
 interface ClinicConfig {
@@ -14,7 +15,18 @@ interface ClinicConfig {
   address: string;
   openTime: number;
   closeTime: number;
+  offDays: number[];
 }
+
+const DAYS = [
+  { label: "Sun", value: 0 },
+  { label: "Mon", value: 1 },
+  { label: "Tue", value: 2 },
+  { label: "Wed", value: 3 },
+  { label: "Thu", value: 4 },
+  { label: "Fri", value: 5 },
+  { label: "Sat", value: 6 },
+];
 
 export function ClinicProfile({ config }: { config: ClinicConfig }) {
   const [isPending, setIsPending] = useState(false);
@@ -23,10 +35,14 @@ export function ClinicProfile({ config }: { config: ClinicConfig }) {
     address: config.address,
     openTime: config.openTime,
     closeTime: config.closeTime,
+    offDays: config.offDays || [0],
   });
 
   async function clientAction(form: FormData) {
     setIsPending(true);
+    // Add offDays to formData as they are handled manually in the state
+    formData.offDays.forEach(day => form.append('offDays', day.toString()));
+    
     try {
       await updateClinicConfig(form);
       toast.success("Clinic settings updated successfully!");
@@ -46,16 +62,25 @@ export function ClinicProfile({ config }: { config: ClinicConfig }) {
     }));
   };
 
+  const toggleDay = (dayValue: number) => {
+    setFormData(prev => ({
+      ...prev,
+      offDays: prev.offDays.includes(dayValue) 
+        ? prev.offDays.filter(d => d !== dayValue) 
+        : [...prev.offDays, dayValue]
+    }));
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Clinic Profile</CardTitle>
         <CardDescription>
-          Manage your clinic's operational hours and basic information.
+          Manage your clinic's operational hours and weekly off-days.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={clientAction} className="space-y-5">
+        <form action={clientAction} className="space-y-6">
           <div className="grid gap-2">
             <Label htmlFor="name">Clinic Name</Label>
             <Input 
@@ -105,6 +130,31 @@ export function ClinicProfile({ config }: { config: ClinicConfig }) {
                 required 
               />
             </div>
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <Label className="text-sm font-bold flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-primary" />
+              Weekly Off-Days
+            </Label>
+            <div className="grid grid-cols-4 gap-2">
+              {DAYS.map((day) => (
+                <div key={day.value} className="flex items-center space-x-2 bg-slate-50 border rounded p-2">
+                  <Checkbox 
+                    id={`day-${day.value}`} 
+                    checked={formData.offDays.includes(day.value)}
+                    onCheckedChange={() => toggleDay(day.value)}
+                  />
+                  <Label 
+                    htmlFor={`day-${day.value}`}
+                    className="text-[10px] font-bold cursor-pointer"
+                  >
+                    {day.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground italic">AI blocks these days automatically.</p>
           </div>
 
           <div className="pt-2">

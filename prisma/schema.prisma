@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Patient {
@@ -51,7 +52,15 @@ model ClinicConfig {
   address   String   @default("123 Main St, New Delhi")
   openTime  Int      @default(9)
   closeTime Int      @default(18)
+  offDays   Int[]    @default([0])
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Holiday {
+  id        String   @id @default(uuid())
+  date      DateTime @unique
+  reason    String?
+  createdAt DateTime @default(now())
 }
 
 model WhatsAppMessage {

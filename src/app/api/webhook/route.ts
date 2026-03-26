@@ -321,10 +321,20 @@ export async function POST(request: Request) {
     if (nextState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date) {
         if (finalDocId) {
             const doc = await prisma.doctor.findUnique({ where: { id: finalDocId } });
-            const clinicConfig = (await prisma.clinicConfig.findUnique({ where: { id: 'default' } })) || { openTime: 9, closeTime: 18 };
+            const clinicConfig = (await prisma.clinicConfig.findUnique({ where: { id: 'default' } })) || { openTime: 9, closeTime: 18, offDays: [0] };
             
             const OPEN_H = doc?.openTime ?? clinicConfig.openTime;
             const CLOSE_H = doc?.closeTime ?? clinicConfig.closeTime;
+            const OFF_DAYS = (clinicConfig as any).offDays || [0];
+
+            // Fetch upcoming holidays
+            const upcomingHolidays = await prisma.holiday.findMany({
+                where: { date: { gte: startOfTodayUTC } }
+            });
+            const holidayDates = upcomingHolidays.map(h => {
+                const d = new Date(h.date);
+                return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+            });
 
             const nowTime = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
             const nowIST = new Date(nowTime.getTime() + istOffset);
@@ -360,9 +370,25 @@ export async function POST(request: Request) {
             const booked = Array.from(new Set([...bookedByDoctor, ...bookedByPatient]));
             
             const display: string[] = []; const isoSlots: string[] = [];
-            while (display.length < 5) {
+            let loops = 0;
+            while (display.length < 5 && loops < 100) {
+                loops++;
                 const t = checkTime.getTime();
-                const hIST = new Date(t + istOffset).getUTCHours();
+                const dIST = new Date(t + istOffset);
+                const hIST = dIST.getUTCHours();
+                const dayOfWeek = dIST.getUTCDay(); // 0 is Sunday
+                
+                const dateKey = `${dIST.getUTCFullYear()}-${dIST.getUTCMonth()}-${dIST.getUTCDate()}`;
+                const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(dayOfWeek);
+
+                if (isHoliday) {
+                    // Skip to next day's opening time
+                    dIST.setUTCHours(OPEN_H, 0, 0, 0);
+                    const nextStart = new Date(dIST.getTime() + 24 * 60 * 60 * 1000 - istOffset);
+                    checkTime = nextStart;
+                    continue;
+                }
+
                 if (hIST >= OPEN_H && hIST < CLOSE_H) {
                     if (!booked.includes(t) && t >= (nowTime.getTime() - 60000)) { 
                         display.push(`${display.length + 1}. ${checkTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);

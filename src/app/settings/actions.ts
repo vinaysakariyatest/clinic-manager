@@ -73,12 +73,34 @@ export async function updateClinicConfig(formData: FormData) {
   const address = formData.get('address') as string;
   const openTime = parseInt(formData.get('openTime') as string);
   const closeTime = parseInt(formData.get('closeTime') as string);
+  const offDays = formData.getAll('offDays').map(d => parseInt(d as string));
 
   await prisma.clinicConfig.upsert({
     where: { id: 'default' },
-    update: { name, address, openTime, closeTime },
-    create: { id: 'default', name, address, openTime, closeTime }
+    update: { name, address, openTime, closeTime, offDays },
+    create: { id: 'default', name, address, openTime, closeTime, offDays }
   });
 
+  revalidatePath('/settings');
+}
+
+export async function addHoliday(formData: FormData) {
+  const dateStr = formData.get('date') as string;
+  const reason = formData.get('reason') as string;
+
+  if (!dateStr) throw new Error("Date is required");
+
+  await prisma.holiday.create({
+    data: {
+      date: new Date(dateStr),
+      reason: reason || null,
+    }
+  });
+
+  revalidatePath('/settings');
+}
+
+export async function deleteHoliday(id: string) {
+  await prisma.holiday.delete({ where: { id } });
   revalidatePath('/settings');
 }

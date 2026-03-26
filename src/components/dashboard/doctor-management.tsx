@@ -55,9 +55,9 @@ export function DoctorManagement({ doctors }: { doctors: Doctor[] }) {
         </Dialog>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border overflow-hidden">
+        <div className="border rounded-xl">
           <Table>
-            <TableHeader className="bg-muted/50">
+            <TableHeader className="bg-slate-50">
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Specialization</TableHead>
