@@ -94,14 +94,13 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
                         hour12: true
                       })}
                   </div>
+                  <div className="flex items-center text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold px-2 py-0.5 rounded-full w-fit mt-0.5 border border-slate-200 dark:border-slate-700">
+                    👨‍⚕️ {appointment.doctorName}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-
-          <p className="text-xs text-muted-foreground italic border-l-2 pl-3 py-1 mb-4 border-muted line-clamp-2">
-            {appointment.title.split(' - ')[1] || 'No symptoms noted'}
-          </p>
           
           {appointment.status !== "COMPLETED" && appointment.status !== "NO_SHOW" && (
             <div className="grid grid-cols-2 gap-2">
