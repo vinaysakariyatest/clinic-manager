@@ -33,10 +33,10 @@ model Appointment {
   patientId String
   doctorId  String
   date      DateTime
-  status       String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED
-  symptoms     String?
-  reminderSent Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  status    String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED
+  symptoms  String?
+  createdAt DateTime @default(now())
+
 
   patient Patient @relation(fields: [patientId], references: [id])
   doctor  Doctor  @relation(fields: [doctorId], references: [id])
