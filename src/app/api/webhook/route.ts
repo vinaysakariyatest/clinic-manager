@@ -198,13 +198,19 @@ export async function POST(request: Request) {
         aiResponse.reply_message = `${getDocDisplay(finalDocId)} ke saath appointment confirm karne ke liye aapko kaun sa time pasand hai? Main aapko available slots bata deta hoon.`;
     } else if ((aiResponse.intent === 'BOOK_APPOINTMENT' || (isConfirming && nextState === 'AWAITING_CONFIRMATION')) && nextState === 'AWAITING_CONFIRMATION') {
         const doc = doctors.find(d => d.id === finalDocId);
+        const config = await prisma.clinicConfig.findUnique({ where: { id: 'default' } });
         const time = (patient as any).lastProposedTime;
-        const formatted = time ? new Date(time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "";
+        const formatted = time ? new Date(time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "long", timeStyle: "short" }) : "";
+        
         await prisma.appointment.create({
             data: { patientId: patient!.id, doctorId: finalDocId!, date: time!, symptoms: (patient as any).lastSymptoms || finalText, status: "CONFIRMED" }
         });
+        
         nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
-        aiResponse.reply_message = `Aapka ${getDocDisplay((patient as any).lastSuggestedDoctorId)} ke saath ${formatted} ka appointment confirm ho gaya hai! Thank you.`;
+        
+        aiResponse.reply_message = `✅ *Appointment Confirmed!*\n\nDear *${patient.name || 'Patient'}*,\n\nYour appointment has been successfully booked.\n\n📋 *Details:*\n👨‍⚕️ *Doctor:* ${getDocDisplay((patient as any).lastSuggestedDoctorId)}\n🗓 *Date & Time:* ${formatted}\n📍 *Address:* ${config?.address || "Clinic Address"}\n\nThank you,\n*${config?.name || "ClinicManager"} Team*`;
+
+
     } else if (aiResponse.intent === 'CANCEL_APPOINTMENT') {
         const futureApps = await prisma.appointment.findMany({
             where: { patientId: patient!.id, status: 'CONFIRMED', date: { gte: startOfTodayUTC } },

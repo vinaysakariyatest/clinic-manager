@@ -34,20 +34,42 @@ export async function createAppointment(formData: FormData) {
     });
   }
 
-  await prisma.appointment.create({
+  const appointment = await prisma.appointment.create({
     data: {
       patientId: patient.id,
       doctorId,
       date: new Date(dateStr),
       status: "CONFIRMED",
       symptoms: symptoms || "Regular Checkup",
+    },
+    include: {
+      doctor: true,
     }
   });
+
+  // Fetch clinic config for address & name
+  const config = await prisma.clinicConfig.findUnique({ where: { id: 'default' } });
+  const formattedTime = new Date(appointment.date).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+
+  const message = `✅ *Appointment Confirmed!*\n\nDear *${patient.name || 'Patient'}*,\n\nYour appointment has been successfully booked.\n\n📋 *Details:*\n👨‍⚕️ *Doctor:* ${appointment.doctor.name}\n🗓 *Date & Time:* ${formattedTime}\n📍 *Address:* ${config?.address || "Clinic Address"}\n\nThank you,\n*${config?.name || "ClinicManager"} Team*`;
+
+
+  // Send WhatsApp notification
+  try {
+    await sendWhatsAppMessage("11za-channel", patient.phone, message);
+  } catch (error) {
+    console.error("WhatsApp notification error:", error);
+  }
 
   revalidatePath('/appointments');
   revalidatePath('/patients');
   revalidatePath('/');
 }
+
 
 export async function cancelAppointment(appointmentId: string, reason: string) {
   try {
