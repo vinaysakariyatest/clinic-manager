@@ -410,7 +410,14 @@ export async function POST(request: Request) {
                 checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);
             }
             if (display.length > 0) {
-                slotText = `\n\nAvailable Slots:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
+                const firstDate = new Date(isoSlots[0]);
+                const dateHeader = firstDate.toLocaleDateString("en-IN", { 
+                    timeZone: "Asia/Kolkata", 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long' 
+                });
+                slotText = `\n\nAvailable Slots for *${dateHeader}*:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patientState.update({ where: { phone }, data: { lastSuggestedSlots: isoSlots } });
             }
         }
