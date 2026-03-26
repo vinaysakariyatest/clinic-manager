@@ -21,6 +21,8 @@ interface Doctor {
   id: string;
   name: string;
   specialization: string;
+  openTime: number;
+  closeTime: number;
 }
 
 export function DoctorManagement({ doctors }: { doctors: Doctor[] }) {
@@ -59,6 +61,7 @@ export function DoctorManagement({ doctors }: { doctors: Doctor[] }) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Specialization</TableHead>
+                <TableHead>Hours</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -67,6 +70,9 @@ export function DoctorManagement({ doctors }: { doctors: Doctor[] }) {
                 <TableRow key={doctor.id} className="hover:bg-muted/50 transition-colors">
                   <TableCell className="font-medium">{doctor.name}</TableCell>
                   <TableCell>{doctor.specialization}</TableCell>
+                  <TableCell className="text-sm">
+                    {doctor.openTime}:00 - {doctor.closeTime}:00
+                  </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Dialog open={!!editDoc && editDoc.id === doctor.id} onOpenChange={(open) => !open && setEditDoc(null)}>
                       <DialogTrigger render={

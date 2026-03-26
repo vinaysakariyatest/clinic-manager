@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 export async function addDoctor(formData: FormData) {
   const name = formData.get('name') as string;
   const specialization = formData.get('specialization') as string;
+  const openTime = parseInt(formData.get('openTime') as string) || 9;
+  const closeTime = parseInt(formData.get('closeTime') as string) || 18;
 
   if (!name || !specialization) {
     throw new Error("Name and specialization are required");
@@ -18,6 +20,8 @@ export async function addDoctor(formData: FormData) {
       id,
       name,
       specialization,
+      openTime,
+      closeTime,
     },
   });
 
@@ -27,6 +31,8 @@ export async function addDoctor(formData: FormData) {
 export async function updateDoctor(id: string, formData: FormData) {
   const name = formData.get('name') as string;
   const specialization = formData.get('specialization') as string;
+  const openTime = parseInt(formData.get('openTime') as string) || 9;
+  const closeTime = parseInt(formData.get('closeTime') as string) || 18;
 
   if (!name || !specialization) {
     throw new Error("Name and specialization are required");
@@ -37,6 +43,8 @@ export async function updateDoctor(id: string, formData: FormData) {
     data: {
       name,
       specialization,
+      openTime,
+      closeTime,
     },
   });
 

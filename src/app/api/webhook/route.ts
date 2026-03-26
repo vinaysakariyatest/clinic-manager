@@ -283,10 +283,12 @@ export async function POST(request: Request) {
     let slotText = "";
     if (nextState === 'AWAITING_TIME' || aiResponse.intent === 'PROVIDE_TIME' || aiResponse.requested_date) {
         if (finalDocId) {
-            // Fetch Clinic Config for Hours
-            const config = (await prisma.clinicConfig.findUnique({ where: { id: 'default' } })) || { openTime: 9, closeTime: 18 };
-            const OPEN_H = config.openTime;
-            const CLOSE_H = config.closeTime;
+            // Fetch Doctor specific hours, fallback to Clinic Config
+            const doc = await prisma.doctor.findUnique({ where: { id: finalDocId } });
+            const clinicConfig = (await prisma.clinicConfig.findUnique({ where: { id: 'default' } })) || { openTime: 9, closeTime: 18 };
+            
+            const OPEN_H = doc?.openTime ?? clinicConfig.openTime;
+            const CLOSE_H = doc?.closeTime ?? clinicConfig.closeTime;
 
             const now = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
             const nowIST = new Date(now.getTime() + istOffset);

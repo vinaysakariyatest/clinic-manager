@@ -21,7 +21,7 @@ export function EditDoctorForm({
   doctor, 
   onSuccess 
 }: { 
-  doctor: { id: string; name: string; specialization: string }, 
+  doctor: { id: string; name: string; specialization: string; openTime: number; closeTime: number }, 
   onSuccess: () => void 
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +47,16 @@ export function EditDoctorForm({
       <div className="grid gap-2">
         <Label htmlFor="edit-specialization">Specialization</Label>
         <Input id="edit-specialization" name="specialization" defaultValue={doctor.specialization} required />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="edit-openTime">Opens (24h)</Label>
+          <Input id="edit-openTime" name="openTime" type="number" defaultValue={doctor.openTime} min={0} max={23} required />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="edit-closeTime">Closes (24h)</Label>
+          <Input id="edit-closeTime" name="closeTime" type="number" defaultValue={doctor.closeTime} min={0} max={23} required />
+        </div>
       </div>
       {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
       <div className="flex justify-end pt-2">

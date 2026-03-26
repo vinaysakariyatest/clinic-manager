@@ -23,6 +23,8 @@ model Doctor {
   id             String        @id @default(uuid())
   name           String
   specialization String
+  openTime       Int           @default(9)  // 24h format
+  closeTime      Int           @default(18) // 24h format
   appointments   Appointment[]
 }
 

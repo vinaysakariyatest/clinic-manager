@@ -42,6 +42,16 @@ export function AddDoctorForm({ onSuccess }: { onSuccess: () => void }) {
         <Label htmlFor="specialization">Specialization</Label>
         <Input id="specialization" name="specialization" placeholder="Cardiology, General, etc." required />
       </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="openTime">Opens (24h)</Label>
+          <Input id="openTime" name="openTime" type="number" defaultValue={9} min={0} max={23} required />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="closeTime">Closes (24h)</Label>
+          <Input id="closeTime" name="closeTime" type="number" defaultValue={18} min={0} max={23} required />
+        </div>
+      </div>
       {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
       <div className="flex justify-end pt-2">
         <SubmitButton />
