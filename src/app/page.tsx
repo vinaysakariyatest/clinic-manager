@@ -74,18 +74,65 @@ export default async function Dashboard() {
     status: app.status
   }));
 
+  const stats = {
+    total: todayAppointments.length,
+    completed: todayAppointments.filter(a => a.status === 'COMPLETED').length,
+    noShow: todayAppointments.filter(a => a.status === 'NO_SHOW').length,
+    pending: todayAppointments.filter(a => a.status === 'CONFIRMED' || a.status === 'PENDING').length
+  };
+
   return (
-    <div className="flex flex-col gap-6 h-full">
-      <div className="flex items-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard overview</h1>
+    <div className="flex flex-col gap-6 h-full p-4 lg:p-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Clinic Dashboard</h1>
       </div>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7 pb-6">
-        <Card className="col-span-4 lg:col-span-5 flex flex-col overflow-hidden">
-          <CardHeader>
-            <CardTitle>Schedule</CardTitle>
-            <CardDescription>View all upcoming AI booked slots (Live Data).</CardDescription>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Total Today</CardTitle>
           </CardHeader>
-          <CardContent className="h-[600px] flex-1">
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground mt-1">Scheduled appointments</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">Checked-In</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.completed}</div>
+            <p className="text-xs text-muted-foreground mt-1 text-green-600/70">Patients arrived</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">No-Shows</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.noShow}</div>
+            <p className="text-xs text-muted-foreground mt-1 text-red-600/70">Did not arrive</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-yellow-700 dark:text-yellow-400">Remaining</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.pending}</div>
+            <p className="text-xs text-muted-foreground mt-1 text-yellow-600/70">Awaiting check-in</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7 pb-6">
+        <Card className="col-span-4 lg:col-span-5 flex flex-col overflow-hidden shadow-sm">
+          <CardHeader className="border-b bg-muted/30">
+            <CardTitle>Weekly Schedule</CardTitle>
+            <CardDescription>View and manage all booked slots.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[650px] flex-1 p-0">
             <CalendarView 
                 initialEvents={weekEvents} 
                 openTime={openTime} 
@@ -93,10 +140,10 @@ export default async function Dashboard() {
             />
           </CardContent>
         </Card>
-        <Card className="col-span-3 lg:col-span-2">
+        <Card className="col-span-3 lg:col-span-2 shadow-sm border-t-4 border-t-primary">
           <CardHeader>
-            <CardTitle>Upcoming Appointments</CardTitle>
-            <CardDescription>Next appointments for today.</CardDescription>
+            <CardTitle>Upcoming List</CardTitle>
+            <CardDescription>Manage today's arrivals.</CardDescription>
           </CardHeader>
           <CardContent>
             <AppointmentsList initialAppointments={todayEvents} />

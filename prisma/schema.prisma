@@ -33,7 +33,7 @@ model Appointment {
   patientId String
   doctorId  String
   date      DateTime
-  status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
+  status    String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED
   symptoms  String?
   createdAt DateTime @default(now())
 

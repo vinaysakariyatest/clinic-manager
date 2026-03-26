@@ -80,3 +80,22 @@ export async function cancelAppointment(appointmentId: string, reason: string) {
     return { success: false, error: "Something went wrong" };
   }
 }
+
+export async function updateAppointmentStatus(appointmentId: string, status: string) {
+  try {
+    const appointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status }
+    });
+
+    revalidatePath("/appointments");
+    revalidatePath("/patients");
+    revalidatePath("/");
+    
+    return { success: true, status: appointment.status };
+  } catch (error) {
+    console.error("Update Status Action Error:", error);
+    return { success: false, error: "Something went wrong" };
+  }
+}
+

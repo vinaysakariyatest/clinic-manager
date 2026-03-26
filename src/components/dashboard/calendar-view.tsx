@@ -57,16 +57,31 @@ export function CalendarView({
         components={{
           event: CustomEvent
         }}
-        eventPropGetter={() => ({
-          style: {
-            backgroundColor: "#3b82f6",
-            borderRadius: "4px",
-            color: "white",
-            border: "1px solid #2563eb",
-            display: "block",
-            padding: "2px",
-          },
-        })}
+        eventPropGetter={(event: any) => {
+          let backgroundColor = "#3b82f6"; // Default Blue
+          let borderColor = "#2563eb";
+          
+          if (event.status === "COMPLETED") {
+            backgroundColor = "#10b981"; // Green
+            borderColor = "#059669";
+          } else if (event.status === "NO_SHOW") {
+            backgroundColor = "#ef4444"; // Red
+            borderColor = "#dc2626";
+          }
+          
+          return {
+            style: {
+              backgroundColor,
+              borderRadius: "6px",
+              color: "white",
+              border: `1px solid ${borderColor}`,
+              display: "block",
+              padding: "2px 4px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
+            },
+          };
+        }}
+
       />
     </div>
   );
