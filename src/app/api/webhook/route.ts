@@ -334,69 +334,71 @@ export async function POST(request: Request) {
                 return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
             });
 
-            const nowTime = new Date(); const istOffset = 5.5 * 60 * 60 * 1000;
-            let checkTime = new Date();
-
+            const istOffset = 5.5 * 60 * 60 * 1000;
+            const nowTime = new Date();
+            const nowIST = new Date(nowTime.getTime() + istOffset);
+            
+            let checkTimeIST = new Date(nowIST);
             if (aiResponse.requested_date) {
                 const [y, m, d] = aiResponse.requested_date.split('-').map(Number);
-                const targetIST = new Date(Date.UTC(y, m - 1, d, OPEN_H, 0, 0, 0));
-                checkTime = new Date(targetIST.getTime() - istOffset);
-                if (checkTime < nowTime) checkTime = nowTime;
-            } else {
-                const currentIST = new Date(checkTime.getTime() + istOffset);
-                const hIST = currentIST.getUTCHours();
-                if (hIST < OPEN_H) {
-                    currentIST.setUTCHours(OPEN_H, 0, 0, 0);
-                    checkTime = new Date(currentIST.getTime() - istOffset);
-                } else if (hIST >= CLOSE_H) {
-                    currentIST.setDate(currentIST.getDate() + 1);
-                    currentIST.setUTCHours(OPEN_H, 0, 0, 0);
-                    checkTime = new Date(currentIST.getTime() - istOffset);
-                } else {
-                    checkTime.setMinutes(checkTime.getMinutes() + (30 - (checkTime.getMinutes() % 30)), 0, 0);
-                }
+                checkTimeIST = new Date(Date.UTC(y, m - 1, d, OPEN_H, 0, 0, 0));
             }
-            checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);
 
-            const booked = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: nowTime, lte: new Date(nowTime.getTime() + 10 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
-            
-            const display: string[] = []; const isoSlots: string[] = [];
-            const dIST_Req = new Date(checkTime.getTime() + istOffset);
-            const targetDay = dIST_Req.getUTCDate();
-            const dateKey_Req = `${dIST_Req.getUTCFullYear()}-${dIST_Req.getUTCMonth()}-${dIST_Req.getUTCDate()}`;
-            const isHoliday_Req = holidayDates.includes(dateKey_Req) || OFF_DAYS.includes(dIST_Req.getUTCDay());
+            // Start of opening hours for the target day in IST
+            const openIST = new Date(checkTimeIST);
+            openIST.setUTCHours(OPEN_H, 0, 0, 0);
+            const closeIST = new Date(checkTimeIST);
+            closeIST.setUTCHours(CLOSE_H, 0, 0, 0);
 
-            if (isHoliday_Req && aiResponse.requested_date) {
-                const dateHeader = dIST_Req.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+            // Starting point for slots
+            let targetStartTimeIST = new Date(openIST);
+            if (checkTimeIST.toDateString() === nowIST.toDateString()) {
+                const bufferTime = new Date(nowIST.getTime() + 15 * 60000); // 15 min buffer
+                const minutes = bufferTime.getMinutes();
+                if (minutes > 0 && minutes <= 30) bufferTime.setMinutes(30, 0, 0);
+                else if (minutes > 30) bufferTime.setHours(bufferTime.getHours() + 1, 0, 0, 0);
+                else bufferTime.setMinutes(0, 0, 0);
+                
+                if (bufferTime > openIST) targetStartTimeIST = bufferTime;
+            }
+
+            const booked = (await prisma.appointment.findMany({ 
+              where: { doctorId: finalDocId, date: { gte: nowTime, lte: new Date(nowTime.getTime() + 10*24*60*60*1000) }, status: { not: 'CANCELLED' } } 
+            })).map(a => a.date.getTime());
+
+            const dateKey = `${targetStartTimeIST.getUTCFullYear()}-${targetStartTimeIST.getUTCMonth()}-${targetStartTimeIST.getUTCDate()}`;
+            const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(targetStartTimeIST.getUTCDay());
+
+            if (isHoliday && aiResponse.requested_date) {
+                const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                 const body = `Maaf kijiye, clinic *${dateHeader}* ko band rahega (Holiday/Weekly Off). Kripya kisi aur din ka appointment select karein.`;
                 await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
                 return NextResponse.json({ success: true });
             }
 
-            let loops = 0;
-            while (loops < 100) {
-                loops++;
-                const t = checkTime.getTime();
-                const dIST = new Date(t + istOffset);
-                if (dIST.getUTCDate() !== targetDay) break;
-                const hIST = dIST.getUTCHours();
-                if (!isHoliday_Req && hIST >= OPEN_H && hIST < CLOSE_H) {
-                    if (!booked.includes(t) && t >= (nowTime.getTime() - 60000)) { 
-                        display.push(`${display.length + 1}. ${checkTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
-                        isoSlots.push(checkTime.toISOString());
+            const display: string[] = []; 
+            const isoSlots: string[] = [];
+            let currentPointerIST = new Date(targetStartTimeIST);
+
+            while (currentPointerIST < closeIST && display.length < 10) {
+                const utcTime = new Date(currentPointerIST.getTime() - istOffset);
+                const t = utcTime.getTime();
+                
+                if (!isHoliday && currentPointerIST >= openIST) {
+                    if (!booked.includes(t) && t >= (nowTime.getTime() - 60000)) {
+                        display.push(`${display.length + 1}. ${currentPointerIST.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
+                        isoSlots.push(utcTime.toISOString());
                     }
                 }
-                checkTime = new Date(checkTime.getTime() + 30 * 60 * 1000);
-                checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);
+                currentPointerIST = new Date(currentPointerIST.getTime() + 30 * 60000);
             }
 
             if (display.length > 0) {
-                const firstDate = new Date(isoSlots[0]);
-                const dateHeader = firstDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                 slotText = `\n\nAvailable Slots for *${dateHeader}*:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patientState.update({ where: { phone }, data: { lastSuggestedSlots: isoSlots } });
-            } else {
-                 const dateHeader = dIST_Req.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+            } else if (aiResponse.requested_date || aiResponse.intent === 'PROVIDE_TIME') {
+                 const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                  const body = `Maaf kijiye, *${dateHeader}* ko koi available slots nahi mile. Kripya koi aur date try karein.`;
                  await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
                  return NextResponse.json({ success: true });
