@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         suggested_doctor_id: z.string().optional(),
         suggested_doctor: z.string().optional(),
         time_preference: z.string().optional(),
-        requested_date: z.string().optional(),
+        requested_date: z.string().optional().describe('Extracted date in YYYY-MM-DD. IMPORTANT: If user mentions a specific day like "28 March", extract it strictly.'),
         reply_message: z.string(),
       }),
       prompt: `You are clinical assistant "ClinicManager". Current IST Time: ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})}.
@@ -155,13 +155,15 @@ export async function POST(request: Request) {
       Available Doctors: ${doctorsContext}
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR. Use the exact ID from the list below.
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
-      - If user asks for time/date -> PROVIDE_TIME or extract requested_date.
+      - If user asks for time/date (e.g., "28 March ka do") -> PROVIDE_TIME and extract requested_date.
       - If state is AWAITING_CONFIRMATION and user says YES/OK/Book -> BOOK_APPOINTMENT (With ${lastDoctorName}).
       - If user asks to see their booking/appointment/list -> VIEW_APPOINTMENTS.
       - If user wants to cancel an appointment -> CANCEL_APPOINTMENT.
       - IMPORTANT: When suggesting a doctor, you MUST return the correct "suggested_doctor_id" from the list.
       - Max 2-3 sentences. Hinglish only.`,
     });
+
+    console.log("AI Response:", JSON.stringify(aiResponse, null, 2));
 
     // 3. STATE MACHINE
     let nextState = pState.conversationState;
@@ -337,9 +339,7 @@ export async function POST(request: Request) {
 
             if (aiResponse.requested_date) {
                 const [y, m, d] = aiResponse.requested_date.split('-').map(Number);
-                // Create IST date at opening hour
                 const targetIST = new Date(Date.UTC(y, m - 1, d, OPEN_H, 0, 0, 0));
-                // Since targetIST was created with UTC but meant as IST, we adjust
                 checkTime = new Date(targetIST.getTime() - istOffset);
                 if (checkTime < nowTime) checkTime = nowTime;
             } else {
@@ -358,22 +358,19 @@ export async function POST(request: Request) {
             }
             checkTime.setSeconds(0, 0); checkTime.setMilliseconds(0);
 
-            const bookedByDoctor = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: nowTime, lte: new Date(nowTime.getTime() + 10 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
-            const booked = Array.from(new Set(bookedByDoctor));
+            const booked = (await prisma.appointment.findMany({ where: { doctorId: finalDocId, date: { gte: nowTime, lte: new Date(nowTime.getTime() + 10 * 24 * 60 * 60 * 1000) }, status: { not: 'CANCELLED' } } })).map(a => a.date.getTime());
             
             const display: string[] = []; const isoSlots: string[] = [];
-            const dIST_First = new Date(checkTime.getTime() + istOffset);
-            const targetDay = dIST_First.getUTCDate();
-            const dateKey_First = `${dIST_First.getUTCFullYear()}-${dIST_First.getUTCMonth()}-${dIST_First.getUTCDate()}`;
-            const isHoliday_First = holidayDates.includes(dateKey_First) || OFF_DAYS.includes(dIST_First.getUTCDay());
+            const dIST_Req = new Date(checkTime.getTime() + istOffset);
+            const targetDay = dIST_Req.getUTCDate();
+            const dateKey_Req = `${dIST_Req.getUTCFullYear()}-${dIST_Req.getUTCMonth()}-${dIST_Req.getUTCDate()}`;
+            const isHoliday_Req = holidayDates.includes(dateKey_Req) || OFF_DAYS.includes(dIST_Req.getUTCDay());
 
-            if (isHoliday_First && aiResponse.requested_date) {
-                const dateHeader = dIST_First.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
-                return NextResponse.json({
-                    messaging_product: "whatsapp",
-                    to: phone,
-                    text: { body: `${aiResponse.reply_message}\n\nMaaf kijiye, clinic *${dateHeader}* ko band rahega (Holiday/Weekly Off). Kripya kisi aur din ka appointment select karein.` }
-                });
+            if (isHoliday_Req && aiResponse.requested_date) {
+                const dateHeader = dIST_Req.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                const body = `Maaf kijiye, clinic *${dateHeader}* ko band rahega (Holiday/Weekly Off). Kripya kisi aur din ka appointment select karein.`;
+                await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
+                return NextResponse.json({ success: true });
             }
 
             let loops = 0;
@@ -382,13 +379,8 @@ export async function POST(request: Request) {
                 const t = checkTime.getTime();
                 const dIST = new Date(t + istOffset);
                 if (dIST.getUTCDate() !== targetDay) break;
-
-                const dayOfWeek = dIST.getUTCDay();
                 const hIST = dIST.getUTCHours();
-                const dateKey = `${dIST.getUTCFullYear()}-${dIST.getUTCMonth()}-${dIST.getUTCDate()}`;
-                const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(dayOfWeek);
-
-                if (!isHoliday && hIST >= OPEN_H && hIST < CLOSE_H) {
+                if (!isHoliday_Req && hIST >= OPEN_H && hIST < CLOSE_H) {
                     if (!booked.includes(t) && t >= (nowTime.getTime() - 60000)) { 
                         display.push(`${display.length + 1}. ${checkTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
                         isoSlots.push(checkTime.toISOString());
@@ -399,11 +391,15 @@ export async function POST(request: Request) {
             }
 
             if (display.length > 0) {
-                const dateHeader = new Date(isoSlots[0]).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                const firstDate = new Date(isoSlots[0]);
+                const dateHeader = firstDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                 slotText = `\n\nAvailable Slots for *${dateHeader}*:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patientState.update({ where: { phone }, data: { lastSuggestedSlots: isoSlots } });
             } else {
-                 slotText = `\n\nMaaf kijiye, is din koi available slots nahi mile. Kripya koi aur date try karein.`;
+                 const dateHeader = dIST_Req.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                 const body = `Maaf kijiye, *${dateHeader}* ko koi available slots nahi mile. Kripya koi aur date try karein.`;
+                 await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
+                 return NextResponse.json({ success: true });
             }
         }
     }
