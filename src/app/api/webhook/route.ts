@@ -268,9 +268,11 @@ export async function POST(request: Request) {
             }
         });
         
-        nextState = 'IDLE'; finalDocId = null; finalProposedTime = null;
-        
-        aiResponse.reply_message = `✅ *Appointment Confirmed!*\n\nDear *${patient.name || 'Patient'}*,\n\nYour appointment has been successfully booked.\n\n📋 *Details:*\n👨‍⚕️ *Doctor:* ${getDocDisplay(pState.lastSuggestedDoctorId)}\n🗓 *Date & Time:* ${formatted}\n📍 *Address:* ${config?.address || "Clinic Address"}\n\nThank you,\n*${config?.name || "ClinicManager"} Team*`;
+        const mapLink = config?.address 
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.address)}`
+            : "";
+            
+        aiResponse.reply_message = `✅ *Appointment Confirmed!*\n\nDear *${patient.name || 'Patient'}*,\n\nYour appointment has been successfully booked.\n\n📋 *Details:*\n👨‍⚕️ *Doctor:* ${getDocDisplay(pState.lastSuggestedDoctorId)}\n🗓 *Date & Time:* ${formatted}\n📍 *Address:* ${config?.address || "Clinic Address"}\n\n${mapLink ? `🔗 *View on Maps:* ${mapLink}\n\n` : ""}Thank you,\n*${config?.name || "ClinicManager"} Team*`;
 
     } else if (aiResponse.intent === 'CANCEL_APPOINTMENT') {
         if (!patient) {
