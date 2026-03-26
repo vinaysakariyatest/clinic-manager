@@ -3,34 +3,33 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 model Patient {
-  id                    String        @id @default(uuid())
-  phone                 String        @unique
-  name                  String?
-  createdAt             DateTime      @default(now())
-  appointments          Appointment[]
+  id           String        @id @default(uuid())
+  phone        String        @unique
+  name         String?
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
 }
 
 model PatientState {
-  phone                 String        @id
-  conversationState     String        @default("IDLE") // IDLE, DOCTOR_SUGGESTED, AWAITING_CONFIRMATION
+  phone                 String    @id
+  conversationState     String    @default("IDLE")
   lastSuggestedDoctorId String?
   lastSymptoms          String?
   lastProposedTime      DateTime?
-  lastSuggestedSlots    String[]      @default([])
-  updatedAt             DateTime      @default(now()) @updatedAt
+  lastSuggestedSlots    String[]  @default([])
+  updatedAt             DateTime  @default(now()) @updatedAt
 }
-
 
 model Doctor {
   id             String        @id @default(uuid())
   name           String
   specialization String
-  openTime       Int           @default(9)  // 24h format
-  closeTime      Int           @default(18) // 24h format
+  closeTime      Int           @default(18)
+  openTime       Int           @default(9)
   appointments   Appointment[]
 }
 
@@ -39,21 +38,19 @@ model Appointment {
   patientId String
   doctorId  String
   date      DateTime
-  status    String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED
+  status    String   @default("PENDING")
   symptoms  String?
   createdAt DateTime @default(now())
-
-
-  patient Patient @relation(fields: [patientId], references: [id])
-  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+  patient   Patient  @relation(fields: [patientId], references: [id])
 }
 
 model ClinicConfig {
   id        String   @id @default("default")
   name      String   @default("City Medical Center")
   address   String   @default("123 Main St, New Delhi")
-  openTime  Int      @default(9)  // 24h format
-  closeTime Int      @default(18) // 24h format
+  openTime  Int      @default(9)
+  closeTime Int      @default(18)
   updatedAt DateTime @default(now()) @updatedAt
 }
 

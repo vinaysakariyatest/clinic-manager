@@ -70,6 +70,7 @@ export default async function Dashboard() {
     start: app.date.toISOString(),
     end: new Date(new Date(app.date).getTime() + 30 * 60000).toISOString(),
     patientName: app.patient.name || app.patient.phone,
+    patientPhone: app.patient.phone,
     doctorName: app.doctor.name,
     status: app.status
   }));
