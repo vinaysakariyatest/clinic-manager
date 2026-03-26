@@ -142,12 +142,13 @@ export async function POST(request: Request) {
       model: mistral('mistral-medium-latest'), 
       schema: z.object({
         intent: z.enum(['GENERAL_REPLY', 'SUGGEST_DOCTOR', 'CONFIRM_DOCTOR', 'PROVIDE_TIME', 'BOOK_APPOINTMENT', 'CANCEL_APPOINTMENT', 'RESTART', 'VIEW_APPOINTMENTS']),
+        reply_message: z.string(),
         symptoms: z.string().optional(),
         suggested_doctor_id: z.string().optional(),
         suggested_doctor: z.string().optional(),
-        time_preference: z.string().optional(),
-        requested_date: z.string().optional().describe('Extracted date in YYYY-MM-DD. IMPORTANT: If user mentions a specific day like "28 March", extract it strictly.'),
-        reply_message: z.string(),
+        specialization: z.string().optional(),
+        suggested_time: z.string().optional(),
+        requested_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Extracted date in YYYY-MM-DD. IMPORTANT: If user mentions a specific day like "28 March", extract it strictly.'),
       }),
       prompt: `You are clinical assistant "ClinicManager". Current IST Time: ${new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"})}.
       Patient: ${patientNameForPrompt}, State: ${pState.conversationState}, Last Doctor: ${lastDoctorName}
