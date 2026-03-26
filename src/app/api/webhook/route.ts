@@ -338,39 +338,46 @@ export async function POST(request: Request) {
             const nowTime = new Date();
             const nowIST = new Date(nowTime.getTime() + istOffset);
             
-            let checkTimeIST = new Date(nowIST);
+            // 1. Identify Target Date (IST)
+            let targetDayIST: Date;
             if (aiResponse.requested_date) {
                 const [y, m, d] = aiResponse.requested_date.split('-').map(Number);
-                checkTimeIST = new Date(Date.UTC(y, m - 1, d, OPEN_H, 0, 0, 0));
+                // Create IST date at opening hour
+                targetDayIST = new Date(y, m - 1, d, OPEN_H, 0, 0, 0);
+            } else {
+                targetDayIST = new Date(nowIST);
+                targetDayIST.setHours(OPEN_H, 0, 0, 0);
             }
 
-            // Start of opening hours for the target day in IST
-            const openIST = new Date(checkTimeIST);
-            openIST.setUTCHours(OPEN_H, 0, 0, 0);
-            const closeIST = new Date(checkTimeIST);
-            closeIST.setUTCHours(CLOSE_H, 0, 0, 0);
+            // 2. Define Bounds (IST)
+            const openIST = new Date(targetDayIST);
+            openIST.setHours(OPEN_H, 0, 0, 0);
+            const closeIST = new Date(targetDayIST);
+            closeIST.setHours(CLOSE_H, 0, 0, 0);
 
-            // Starting point for slots
-            let targetStartTimeIST = new Date(openIST);
-            if (checkTimeIST.toDateString() === nowIST.toDateString()) {
-                const bufferTime = new Date(nowIST.getTime() + 15 * 60000); // 15 min buffer
-                const minutes = bufferTime.getMinutes();
-                if (minutes > 0 && minutes <= 30) bufferTime.setMinutes(30, 0, 0);
-                else if (minutes > 30) bufferTime.setHours(bufferTime.getHours() + 1, 0, 0, 0);
+            // 3. Determine Start Point (IST)
+            let currentPointerIST = new Date(openIST);
+            if (targetDayIST.toDateString() === nowIST.toDateString()) {
+                const bufferTime = new Date(nowIST.getTime() + 15 * 60000); 
+                // Round UP to next 30 min
+                const mins = bufferTime.getMinutes();
+                if (mins > 0 && mins <= 30) bufferTime.setMinutes(30, 0, 0);
+                else if (mins > 30) bufferTime.setHours(bufferTime.getHours() + 1, 0, 0, 0);
                 else bufferTime.setMinutes(0, 0, 0);
                 
-                if (bufferTime > openIST) targetStartTimeIST = bufferTime;
+                if (bufferTime > openIST) currentPointerIST = bufferTime;
             }
 
+            // Booked slots in UTC for comparison
             const booked = (await prisma.appointment.findMany({ 
               where: { doctorId: finalDocId, date: { gte: nowTime, lte: new Date(nowTime.getTime() + 10*24*60*60*1000) }, status: { not: 'CANCELLED' } } 
             })).map(a => a.date.getTime());
 
-            const dateKey = `${targetStartTimeIST.getUTCFullYear()}-${targetStartTimeIST.getUTCMonth()}-${targetStartTimeIST.getUTCDate()}`;
-            const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(targetStartTimeIST.getUTCDay());
+            const dateKey = `${currentPointerIST.getFullYear()}-${currentPointerIST.getMonth()}-${currentPointerIST.getDate()}`;
+            const isHoliday = holidayDates.includes(dateKey) || OFF_DAYS.includes(currentPointerIST.getDay());
 
             if (isHoliday && aiResponse.requested_date) {
-                const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                const dateHeader = currentPointerIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                 const body = `Maaf kijiye, clinic *${dateHeader}* ko band rahega (Holiday/Weekly Off). Kripya kisi aur din ka appointment select karein.`;
                 await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
                 return NextResponse.json({ success: true });
@@ -378,15 +385,19 @@ export async function POST(request: Request) {
 
             const display: string[] = []; 
             const isoSlots: string[] = [];
-            let currentPointerIST = new Date(targetStartTimeIST);
+            const targetDayStr = currentPointerIST.toDateString();
 
-            while (currentPointerIST < closeIST && display.length < 10) {
+            // Loop through the entire day until clinic closes
+            while (currentPointerIST < closeIST) {
+                if (currentPointerIST.toDateString() !== targetDayStr) break;
+
                 const utcTime = new Date(currentPointerIST.getTime() - istOffset);
                 const t = utcTime.getTime();
                 
-                if (!isHoliday && currentPointerIST >= openIST) {
+                if (!isHoliday) {
+                    // Filter: Not booked AND (if today, not in past)
                     if (!booked.includes(t) && t >= (nowTime.getTime() - 60000)) {
-                        display.push(`${display.length + 1}. ${currentPointerIST.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })}`);
+                        display.push(`${display.length + 1}. ${currentPointerIST.toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`);
                         isoSlots.push(utcTime.toISOString());
                     }
                 }
@@ -394,11 +405,11 @@ export async function POST(request: Request) {
             }
 
             if (display.length > 0) {
-                const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                const dateHeader = new Date(isoSlots[0]).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                 slotText = `\n\nAvailable Slots for *${dateHeader}*:\n${display.join('\n')}\n\nReply number (1-${display.length}).`;
                 await prisma.patientState.update({ where: { phone }, data: { lastSuggestedSlots: isoSlots } });
             } else if (aiResponse.requested_date || aiResponse.intent === 'PROVIDE_TIME') {
-                 const dateHeader = targetStartTimeIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
+                 const dateHeader = targetDayIST.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: 'long', day: 'numeric', month: 'long' });
                  const body = `Maaf kijiye, *${dateHeader}* ko koi available slots nahi mile. Kripya koi aur date try karein.`;
                  await sendWhatsAppMessage(payload.to || "11za-channel", payload.from, body);
                  return NextResponse.json({ success: true });
