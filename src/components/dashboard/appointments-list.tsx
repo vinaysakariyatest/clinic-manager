@@ -43,7 +43,7 @@ export function AppointmentsList({ initialAppointments }: { initialAppointments:
   }
 
   return (
-    <div className="space-y-4 max-h-[600px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
+    <div className="space-y-4 pr-2">
       {initialAppointments.map((appointment) => (
         <div 
           key={appointment.id} 

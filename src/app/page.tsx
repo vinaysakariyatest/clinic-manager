@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarView } from "@/components/dashboard/calendar-view";
 import { AppointmentsList } from "@/components/dashboard/appointments-list";
+import { AppointmentChart } from "@/components/dashboard/appointment-chart";
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,24 @@ export default async function Dashboard() {
     app.date >= startOfTodayUTC && app.date <= endOfTodayUTC
   );
 
+  // Generate data for the 7-day chart (Mon-Sun)
+  const chartData = [];
+  const tempDate = new Date(currentWeekStartIST);
+  for (let i = 0; i < 7; i++) {
+    const dayLimitStart = new Date(tempDate.getTime() - istOffset);
+    const dayLimitEnd = new Date(dayLimitStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const count = allWeekAppointments.filter(app => 
+      app.date >= dayLimitStart && app.date < dayLimitEnd
+    ).length;
+
+    chartData.push({
+      name: tempDate.toLocaleDateString("en-IN", { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+      appointments: count
+    });
+    tempDate.setUTCDate(tempDate.getUTCDate() + 1);
+  }
+
   const weekEvents = allWeekAppointments.map((app: any) => ({
     id: app.id,
     title: `${app.patient.name || app.patient.phone} with ${app.doctor.name} - ${app.symptoms || 'General'}`,
@@ -89,67 +108,61 @@ export default async function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20">
+        <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Total Today</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground mt-1">Scheduled appointments</p>
+            <p className="text-xs text-muted-foreground mt-1 tracking-tight">Scheduled appointments</p>
           </CardContent>
         </Card>
-        <Card className="bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20">
+        <Card className="bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">Checked-In</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground mt-1 text-green-600/70">Patients arrived</p>
+            <p className="text-xs text-muted-foreground mt-1 text-green-600/70 tracking-tight">Patients arrived</p>
           </CardContent>
         </Card>
-        <Card className="bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20">
+        <Card className="bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400">Missed</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.noShow}</div>
-            <p className="text-xs text-muted-foreground mt-1 text-red-600/70">Appointments missed</p>
+            <p className="text-xs text-muted-foreground mt-1 text-red-600/70 tracking-tight">Appointments missed</p>
           </CardContent>
         </Card>
-        <Card className="bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20">
+        <Card className="bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-yellow-700 dark:text-yellow-400">Remaining</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground mt-1 text-yellow-600/70">Awaiting check-in</p>
+            <p className="text-xs text-muted-foreground mt-1 text-yellow-600/70 tracking-tight">Awaiting check-in</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7 pb-6">
-        <Card className="col-span-4 lg:col-span-5 flex flex-col overflow-hidden shadow-sm">
-          <CardHeader className="border-b bg-muted/30">
-            <CardTitle>Weekly Schedule</CardTitle>
-            <CardDescription>View and manage all booked slots.</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[650px] flex-1 p-0">
-            <CalendarView 
-                initialEvents={weekEvents} 
-                openTime={openTime} 
-                closeTime={closeTime} 
-            />
-          </CardContent>
-        </Card>
-        <Card className="col-span-3 lg:col-span-2 shadow-sm border-t-4 border-t-primary">
-          <CardHeader>
-            <CardTitle>Upcoming List</CardTitle>
-            <CardDescription>Manage today's arrivals.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AppointmentsList initialAppointments={todayEvents} />
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 lg:grid-cols-5 pb-6 items-stretch">
+        <div className="lg:col-span-3">
+           <AppointmentChart data={chartData} className="h-full" />
+        </div>
+        <div className="lg:col-span-2">
+          <Card className="shadow-sm border-t-4 border-indigo-600 h-[450px] flex flex-col">
+            <CardHeader className="bg-slate-50/50 pt-3 pb-2 flex-shrink-0">
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-indigo-600 italic">Day's Queue</CardTitle>
+              <CardDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Real-time status management</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto pt-4 px-0 custom-scrollbar">
+               <div className="px-4 pb-6">
+                  <AppointmentsList initialAppointments={todayEvents} />
+               </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
