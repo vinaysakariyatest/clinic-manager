@@ -5,10 +5,13 @@ import { SearchInput } from "@/components/dashboard/search-input";
 export default async function PatientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ query?: string }>;
+  searchParams: Promise<{ query?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const query = params.query || "";
+  const page = parseInt(params.page || "1", 10);
+  const limit = 10;
+  const skip = (page - 1) * limit;
 
   const where: any = {};
   if (query) {
@@ -18,25 +21,32 @@ export default async function PatientsPage({
     ];
   }
 
-  const patients = await prisma.patient.findMany({
-    where,
-    include: {
-      appointments: {
-        include: {
-          doctor: true,
+  const [patients, totalCount] = await Promise.all([
+    prisma.patient.findMany({
+      where,
+      include: {
+        appointments: {
+          include: {
+            doctor: true,
+          },
+          orderBy: {
+            date: "desc",
+          },
         },
-        orderBy: {
-          date: "desc",
+        _count: {
+          select: { appointments: true },
         },
       },
-      _count: {
-        select: { appointments: true },
+      orderBy: {
+        name: "asc",
       },
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+      skip,
+      take: limit,
+    }),
+    prisma.patient.count({ where })
+  ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
 
   return (
     <div className="flex flex-col gap-6">
@@ -51,7 +61,11 @@ export default async function PatientsPage({
         <SearchInput placeholder="Search name or phone..." />
       </div>
 
-      <PatientsTable patients={patients} />
+      <PatientsTable 
+        patients={patients} 
+        totalPages={totalPages} 
+        currentPage={page} 
+      />
     </div>
   );
 }

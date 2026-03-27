@@ -9,12 +9,15 @@ import { Suspense } from "react";
 export default async function AppointmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ query?: string; status?: string; date?: string }>;
+  searchParams: Promise<{ query?: string; status?: string; date?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const query = params.query || "";
   const status = params.status || "ALL";
   const dateStr = params.date || "";
+  const page = parseInt(params.page || "1", 10);
+  const limit = 10;
+  const skip = (page - 1) * limit;
 
   const where: any = {};
   if (query) {
@@ -36,7 +39,7 @@ export default async function AppointmentsPage({
     };
   }
 
-  const [doctors, appointmentsSource] = await Promise.all([
+  const [doctors, appointmentsSource, totalCount] = await Promise.all([
     prisma.doctor.findMany({ orderBy: { name: "asc" } }),
     prisma.appointment.findMany({
       where,
@@ -47,8 +50,13 @@ export default async function AppointmentsPage({
       orderBy: {
         date: "desc",
       },
-    })
+      skip,
+      take: limit,
+    }),
+    prisma.appointment.count({ where })
   ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
 
   const appointments = appointmentsSource.map((app: any) => ({
     id: app.id,
@@ -85,7 +93,11 @@ export default async function AppointmentsPage({
         </Suspense>
       </div>
 
-      <AppointmentsTable appointments={appointments} />
+      <AppointmentsTable 
+        appointments={appointments} 
+        totalPages={totalPages}
+        currentPage={page}
+      />
     </div>
   );
 }
