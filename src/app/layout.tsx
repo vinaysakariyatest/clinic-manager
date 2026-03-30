@@ -4,6 +4,8 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { AuthProvider } from "@/components/providers/auth-provider";
+import { auth } from "@/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,23 +22,36 @@ export const metadata: Metadata = {
   description: "AI-Powered Medical Appointment & Clinic Manager",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen flex overflow-hidden`}>
-        <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-auto bg-muted/20 p-4 lg:p-6">
-            {children}
-          </main>
-        </div>
-        <Toaster richColors position="top-right" />
+        <AuthProvider>
+          {session ? (
+            <>
+              <Sidebar />
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <Header />
+                <main className="flex-1 overflow-auto bg-muted/20 p-4 lg:p-6">
+                  {children}
+                </main>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 h-screen overflow-hidden">
+               {children}
+            </div>
+          )}
+          <Toaster richColors position="top-right" />
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

@@ -1,6 +1,9 @@
-import { Bell, Search } from "lucide-react";
+"use client";
+
+import { Bell, Search, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { signOut } from "next-auth/react";
 
 export function Header() {
   return (
@@ -17,10 +20,22 @@ export function Header() {
           </div>
         </form>
       </div>
-      <Button variant="outline" size="icon" className="ml-auto h-8 w-8">
-        <Bell className="h-4 w-4" />
-        <span className="sr-only">Toggle notifications</span>
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="icon" className="h-8 w-8">
+          <Bell className="h-4 w-4" />
+          <span className="sr-only">Toggle notifications</span>
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-8 gap-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden md:inline">Sign Out</span>
+        </Button>
+      </div>
     </header>
   );
 }
+
