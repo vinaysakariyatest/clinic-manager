@@ -72,33 +72,51 @@ export function NotificationCenter() {
                  }
 
                  // 2. Voice Announcement
-                 // Cancel any pending speech to avoid queuing delays
                  window.speechSynthesis.cancel();
                  
-                 const speech = new SpeechSynthesisUtterance();
-                 speech.text = `Attention please! A new appointment has been booked by ${patientName} for ${doctorName}.`;
-                 
-                 // Try to pick a high-quality female voice
-                 const voices = window.speechSynthesis.getVoices();
-                 const femaleVoice = voices.find(v => 
-                   (v.name.includes("Female") || v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Zira") || v.name.includes("Heera") || v.name.includes("Sangeeta") || v.name.includes("Veena")) && 
-                   (v.lang.startsWith("en"))
-                 );
-                 
-                 if (femaleVoice) {
-                   speech.voice = femaleVoice;
+                 const announce = () => {
+                   const speech = new SpeechSynthesisUtterance();
+                   speech.text = `Attention please! A new appointment has been booked by ${patientName} for ${doctorName}.`;
+                   
+                   const voices = window.speechSynthesis.getVoices();
+                   
+                   // Broad search for female voices
+                   const femaleVoice = voices.find(v => 
+                     (v.name.toLowerCase().includes("female") || 
+                      v.name.toLowerCase().includes("google") || 
+                      v.name.toLowerCase().includes("natural") || 
+                      v.name.toLowerCase().includes("zira") || 
+                      v.name.toLowerCase().includes("sangeeta") || 
+                      v.name.toLowerCase().includes("heera") || 
+                      v.name.toLowerCase().includes("samantha") ||
+                      v.name.toLowerCase().includes("veena") ||
+                      v.name.toLowerCase().includes("siri") ||
+                      v.name.toLowerCase().includes("karen")) && 
+                     (v.lang.startsWith("en") || v.lang.startsWith("hi"))
+                   );
+                   
+                   if (femaleVoice) speech.voice = femaleVoice;
+                   
+                   speech.lang = 'en-IN'; 
+                   speech.rate = 0.9; 
+                   speech.pitch = 1.25; 
+                   window.speechSynthesis.speak(speech);
+                   console.log("[NotificationCenter] Female voice selected:", femaleVoice?.name || "Default");
+                 };
+
+                 // If voices aren't loaded yet, wait for them
+                 if (window.speechSynthesis.getVoices().length === 0) {
+                    window.speechSynthesis.onvoiceschanged = announce;
+                 } else {
+                    announce();
                  }
-                 
-                 speech.lang = 'en-IN'; 
-                 speech.rate = 0.85; // Slightly slower for natural feel
-                 speech.pitch = 1.25; // Higher pitch for female tone
-                 window.speechSynthesis.speak(speech);
-                 
-                 console.log("[NotificationCenter] Female voice triggered:", femaleVoice?.name || "Default");
+
+                 console.log("[NotificationCenter] Sound and notification triggered.");
                } catch (err) {
                  console.error("[NotificationCenter] Voice error:", err);
                }
             }
+
 
 
 
