@@ -10,7 +10,7 @@ export default async function Dashboard() {
   // Calculate Current Week (Asia/Kolkata) range in UTC
   const istOffset = 5.5 * 60 * 60 * 1000;
   const nowIST = new Date(Date.now() + istOffset);
-  
+
   // Start and End of TODAY for the side list
   const startOfTodayIST = new Date(nowIST);
   startOfTodayIST.setUTCHours(0, 0, 0, 0);
@@ -51,7 +51,7 @@ export default async function Dashboard() {
   const closeTime = config?.closeTime ?? 18;
 
   // Filter today's appointments for the list
-  const todayAppointments = allWeekAppointments.filter(app => 
+  const todayAppointments = allWeekAppointments.filter(app =>
     app.date >= startOfTodayUTC && app.date <= endOfTodayUTC
   );
 
@@ -62,7 +62,7 @@ export default async function Dashboard() {
     const dayLimitStart = new Date(tempDate.getTime() - istOffset);
     const dayLimitEnd = new Date(dayLimitStart.getTime() + 24 * 60 * 60 * 1000);
 
-    const count = allWeekAppointments.filter(app => 
+    const count = allWeekAppointments.filter(app =>
       app.date >= dayLimitStart && app.date < dayLimitEnd
     ).length;
 
@@ -148,7 +148,7 @@ export default async function Dashboard() {
 
       <div className="grid gap-6 lg:grid-cols-5 pb-6 items-stretch">
         <div className="lg:col-span-3">
-           <AppointmentChart data={chartData} className="h-full" />
+          <AppointmentChart data={chartData} className="h-full" />
         </div>
         <div className="lg:col-span-2">
           <Card className="shadow-sm border-t-4 border-indigo-600 h-[450px] flex flex-col">
@@ -157,9 +157,9 @@ export default async function Dashboard() {
               <CardDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Real-time status management</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto pt-4 px-0 custom-scrollbar">
-               <div className="px-4 pb-6">
-                  <AppointmentsList initialAppointments={todayEvents} />
-               </div>
+              <div className="px-4 pb-6">
+                <AppointmentsList initialAppointments={todayEvents} />
+              </div>
             </CardContent>
           </Card>
         </div>

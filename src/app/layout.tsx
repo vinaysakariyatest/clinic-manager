@@ -17,6 +17,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { VoiceAssistant } from "@/components/dashboard/voice-assistant";
+
 export const metadata: Metadata = {
   title: "ClinicManager - AI Appointment System",
   description: "AI-Powered Medical Appointment & Clinic Manager",
@@ -42,6 +44,7 @@ export default async function RootLayout({
                   {children}
                 </main>
               </div>
+              <VoiceAssistant />
             </>
           ) : (
             <div className="flex-1 h-screen overflow-hidden">
@@ -49,6 +52,7 @@ export default async function RootLayout({
             </div>
           )}
           <Toaster richColors position="top-right" closeButton />
+
 
         </AuthProvider>
       </body>
