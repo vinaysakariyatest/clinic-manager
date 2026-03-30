@@ -22,8 +22,6 @@ export const metadata: Metadata = {
   description: "AI-Powered Medical Appointment & Clinic Manager",
 };
 
-import { NotificationPoller } from "@/components/dashboard/notification-poller";
-
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -44,7 +42,6 @@ export default async function RootLayout({
                   {children}
                 </main>
               </div>
-              <NotificationPoller />
             </>
           ) : (
             <div className="flex-1 h-screen overflow-hidden">
@@ -57,5 +54,6 @@ export default async function RootLayout({
     </html>
   );
 }
+
 
 

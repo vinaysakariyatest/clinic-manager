@@ -1,9 +1,11 @@
 "use client";
 
-import { Bell, Search, LogOut } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
+import { NotificationCenter } from "@/components/dashboard/notification-center";
+
 
 export function Header() {
   return (
@@ -20,15 +22,13 @@ export function Header() {
           </div>
         </form>
       </div>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="h-8 w-8">
-          <Bell className="h-4 w-4" />
-          <span className="sr-only">Toggle notifications</span>
-        </Button>
+      <div className="flex items-center gap-4 px-2">
+        <NotificationCenter />
+        <div className="h-6 w-px bg-slate-200 hidden md:block" />
         <Button 
           variant="outline" 
           size="sm" 
-          className="h-8 gap-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+          className="h-9 gap-2 text-slate-500 border-slate-200 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm font-semibold px-4"
           onClick={() => signOut({ callbackUrl: "/login" })}
         >
           <LogOut className="h-4 w-4" />
@@ -38,4 +38,5 @@ export function Header() {
     </header>
   );
 }
+
 
