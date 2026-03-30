@@ -48,7 +48,8 @@ export default async function RootLayout({
                {children}
             </div>
           )}
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" closeButton />
+
         </AuthProvider>
       </body>
     </html>

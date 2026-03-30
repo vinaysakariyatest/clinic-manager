@@ -40,21 +40,23 @@ export function NotificationCenter() {
       if (data.success && data.appointment) {
         const { id, patientName, doctorName, time, createdAt } = data.appointment;
 
-        // If it's a completely new ID we haven't seen in this session
-        if (id !== lastIdRef.current) {
-          const isActuallyNew = lastIdRef.current !== null; // It's a brand new one during the session
-          const isVeryRecent = (Date.now() - new Date(createdAt).getTime()) < 60000; // Less than 1 min old
+        // Persist the last notified ID to survive page refreshes
+        const storedLastId = localStorage.getItem("last_notified_id");
+
+        if (id !== lastIdRef.current && id !== storedLastId) {
+          const isActuallyNew = lastIdRef.current !== null; 
+          const isVeryRecent = (Date.now() - new Date(createdAt).getTime()) < 30000; 
 
           lastIdRef.current = id;
+          localStorage.setItem("last_notified_id", id);
           
-          // Add to the list
           setNotifications(prev => {
             if (prev.some(n => n.id === id)) return prev;
-            return [data.appointment, ...prev].slice(0, 5); // Keep last 5
+            return [data.appointment, ...prev].slice(0, 5); 
           });
 
-          // Show UI alert IF (it's new during session) OR (it's very fresh on first load)
           if (isActuallyNew || isVeryRecent) {
+
             setUnreadCount(prev => prev + 1);
             
             // Voice Announcement

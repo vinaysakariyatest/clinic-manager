@@ -37,8 +37,10 @@ export function AppointmentChart({ data, className }: ChartProps) {
               <YAxis 
                 axisLine={false}
                 tickLine={false}
+                allowDecimals={false}
                 tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
               />
+
               <Tooltip 
                 cursor={{ fill: '#f8fafc' }}
                 contentStyle={{ 
