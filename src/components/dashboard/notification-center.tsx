@@ -57,6 +57,21 @@ export function NotificationCenter() {
           if (isActuallyNew || isVeryRecent) {
             setUnreadCount(prev => prev + 1);
             
+            // Voice Announcement
+            if (typeof window !== "undefined") {
+               // 1. Play a subtle chime first
+               const chime = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+               chime.volume = 0.5;
+               chime.play().catch(e => console.log("Audio play blocked by browser. User needs to interact first."));
+
+               // 2. Voice Announcement
+               const speech = new SpeechSynthesisUtterance();
+               speech.text = `New appointment booked from ${patientName} with ${doctorName}`;
+               speech.rate = 0.9;
+               speech.pitch = 1.1;
+               window.speechSynthesis.speak(speech);
+            }
+
             toast.success(`🎉 New Patient Booking!`, {
               description: `${patientName} with ${doctorName} (Booked at ${new Date(createdAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })})`,
               icon: <CalendarCheck className="h-5 w-5 text-indigo-600" />,
@@ -64,6 +79,7 @@ export function NotificationCenter() {
             });
           }
         }
+
       }
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
