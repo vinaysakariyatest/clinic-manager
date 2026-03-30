@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Lock, User, Loader2 } from "lucide-react";
+import { Stethoscope, User, Loader2, Lock } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -53,13 +53,14 @@ export default function LoginPage() {
         
         <CardHeader className="space-y-1.5 pb-8 pt-8 text-center">
           <div className="mx-auto bg-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-indigo-200 transform hover:rotate-3 transition-transform">
-            <Lock className="w-7 h-7 text-white" />
+            <Stethoscope className="w-7 h-7 text-white" />
           </div>
           <CardTitle className="text-3xl font-black tracking-tight text-slate-900">ClinicManager</CardTitle>
           <CardDescription className="text-slate-500 font-medium">
             Administrative Access Portal
           </CardDescription>
         </CardHeader>
+
         
         <CardContent className="px-8">
           <form onSubmit={handleLogin} className="space-y-5">
