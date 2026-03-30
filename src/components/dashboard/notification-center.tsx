@@ -59,18 +59,35 @@ export function NotificationCenter() {
             
             // Voice Announcement
             if (typeof window !== "undefined") {
-               // 1. Play a subtle chime first
-               const chime = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-               chime.volume = 0.5;
-               chime.play().catch(e => console.log("Audio play blocked by browser. User needs to interact first."));
+               try {
+                 // 1. Play a subtle chime first
+                 const chime = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+                 chime.volume = 0.6;
+                 
+                 const playPromise = chime.play();
+                 if (playPromise !== undefined) {
+                   playPromise.catch(e => {
+                     console.warn("[NotificationCenter] Audio play blocked. Please click on the dashboard to enable sounds.", e);
+                   });
+                 }
 
-               // 2. Voice Announcement
-               const speech = new SpeechSynthesisUtterance();
-               speech.text = `New appointment booked from ${patientName} with ${doctorName}`;
-               speech.rate = 0.9;
-               speech.pitch = 1.1;
-               window.speechSynthesis.speak(speech);
+                 // 2. Voice Announcement
+                 // Cancel any pending speech to avoid queuing delays
+                 window.speechSynthesis.cancel();
+                 
+                 const speech = new SpeechSynthesisUtterance();
+                 speech.text = `Attention! New appointment booked from ${patientName} with ${doctorName}.`;
+                 speech.lang = 'en-IN'; // Indian English for better accent
+                 speech.rate = 1.0;
+                 speech.pitch = 1.0;
+                 window.speechSynthesis.speak(speech);
+                 
+                 console.log("[NotificationCenter] Sound and Speech triggered for:", id);
+               } catch (err) {
+                 console.error("[NotificationCenter] Voice error:", err);
+               }
             }
+
 
             toast.success(`🎉 New Patient Booking!`, {
               description: `${patientName} with ${doctorName} (Booked at ${new Date(createdAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })})`,
