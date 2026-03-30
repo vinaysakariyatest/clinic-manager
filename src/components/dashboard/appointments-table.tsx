@@ -85,10 +85,18 @@ export function AppointmentsTable({
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleStatusChange = async (id: string | null, newStatus: string) => {
+    if (!id || newStatus === "CANCELLED") {
+      id && setCancellingId(id);
+      return;
+    }
+
+    if (!id) return;
+    
     setUpdatingId(id);
     try {
       const res = await updateAppointmentStatus(id, newStatus);
+
       if (res.success) {
         toast.success(`Status updated to ${newStatus}`);
       } else {
@@ -101,6 +109,7 @@ export function AppointmentsTable({
       setUpdatingId(null);
     }
   };
+
 
   return (
     <>
@@ -169,6 +178,7 @@ export function AppointmentsTable({
                             onValueChange={(value) => handleStatusChange(appointment.id, value)}
                             disabled={itemUpdating}
                         >
+
                             <SelectTrigger className={`h-8 w-[130px] border-none shadow-none font-bold text-[11px] rounded-full px-3 transition-all ${
                                 appointment.status === "CONFIRMED" ? "bg-green-100 text-green-700 hover:bg-green-200" :
                                 "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
@@ -193,7 +203,7 @@ export function AppointmentsTable({
                         variant="ghost" 
                         size="icon" 
                         className="text-muted-foreground hover:text-red-600 h-8 w-8 rounded-lg hover:bg-red-50 transition-colors"
-                        onClick={() => setCancellingId(appointment.id)}
+                        onClick={() => appointment.id && setCancellingId(appointment.id)}
                       >
                         <XIcon className="h-4 w-4" />
                       </Button>
@@ -214,57 +224,69 @@ export function AppointmentsTable({
       </div>
 
       <Dialog open={!!cancellingId} onOpenChange={(open) => !open && setCancellingId(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Cancel Appointment</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground mt-1">
-              Are you sure you want to cancel this appointment? The patient will be notified automatically.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 py-4">
-            <div className="space-y-1.5">
-              <label htmlFor="reason" className="text-sm font-semibold text-foreground">
-                Cancellation Reason (Shown to patient)
+        <DialogContent className="sm:max-w-md border-none shadow-2xl p-0 overflow-hidden bg-white">
+          <div className="bg-red-50/50 p-6 border-b border-red-100/50">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <DialogHeader className="p-0 text-left">
+                <DialogTitle className="text-lg font-black text-slate-900 leading-none">Cancel Appointment?</DialogTitle>
+                <DialogDescription className="text-xs font-medium text-slate-500 mt-1">
+                  The patient will receive a professional notification via WhatsApp.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          </div>
+          
+          <div className="p-6 space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="reason" className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Reason for Cancellation
               </label>
-              <Input
+              <textarea
                 id="reason"
-                placeholder="E.g. Doctor is unavailable, Clinic is closing early..."
+                rows={3}
+                placeholder="Ex: The scheduled doctor is unavailable due to an emergency. Please reschedule."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 disabled={isPending}
-                className="h-10 px-3 focus-visible:ring-offset-2"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm font-medium transition-all focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none resize-none placeholder:text-slate-400"
               />
+              <p className="text-[10px] text-slate-400 italic">
+                * This message will be sent directly to the patient's WhatsApp.
+              </p>
             </div>
           </div>
-          <DialogFooter showCloseButton={false}>
-            <div className="flex flex-row justify-end gap-3 px-4 py-4 -mx-4 -mb-4 border-t bg-muted/50 rounded-b-xl">
-              <Button 
-                variant="outline" 
+
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+             <Button 
+                variant="ghost" 
                 onClick={() => setCancellingId(null)} 
                 disabled={isPending}
-                className="h-10 px-6 font-medium"
+                className="h-10 px-4 text-xs font-bold text-slate-500 hover:bg-slate-200/50"
               >
-                Cancel
+                Go Back
               </Button>
               <Button 
                 variant="destructive" 
                 onClick={handleCancelSubmit} 
-                disabled={isPending || !reason}
-                className="h-10 px-6 font-bold shadow-sm"
+                disabled={isPending || !reason.trim()}
+                className="h-10 px-6 text-xs font-black uppercase tracking-wide shadow-lg shadow-red-200"
               >
                 {isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
+                    Cancelling...
                   </>
                 ) : (
                   "Confirm Cancellation"
                 )}
               </Button>
-            </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
+
     </>
   );
 }

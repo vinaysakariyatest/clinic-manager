@@ -88,9 +88,12 @@ export async function cancelAppointment(appointmentId: string, reason: string) {
       timeStyle: "short",
     });
 
-    const message = `🔔 *Appointment Cancellation Notification*\n\nNamaste ${appointment.patient.name || 'Patient'},\n\nHum kshama chahte hain, lekin aapka aane wala appointment *cancel* kar diya gaya hai.\n\n📋 *Details:*\n🗓 *Date & Time:* ${formattedTime}\n👨‍⚕️ *Doctor:* ${appointment.doctor.name}\n❌ *Reason:* ${reason || "Operational Reasons"}\n\nAap naya appointment WhatsApp ya dashboard ke madhyam se book kar sakte hain.\n\nDhanyavaad,\n*ClinicManager Team*`;
+    const config = await prisma.clinicConfig.findUnique({ where: { id: 'default' } });
+    
+    const message = `🚨 *Appointment Cancellation Notice*\n\nDear *${appointment.patient.name || 'Valued Patient'}*,\n\nWe regret to inform you that your upcoming appointment has been *cancelled*.\n\n📋 *Appointment Details:*\n👨‍⚕️ *Doctor:* ${appointment.doctor.name}\n🗓 *Scheduled For:* ${formattedTime}\n❌ *Reason for Cancellation:* ${reason || "Unforeseen operational circumstances."}\n\nWe apologize for any inconvenience caused. You can reschedule your visit by booking a new slot through our WhatsApp assistant or website.\n\nBest regards,\n*${config?.name || "ClinicManager"} Support Team*`;
 
     await sendWhatsAppMessage("11za-channel", appointment.patient.phone, message);
+
 
     revalidatePath("/appointments");
     revalidatePath("/patients");
