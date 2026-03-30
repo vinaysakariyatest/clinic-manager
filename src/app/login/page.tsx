@@ -119,9 +119,9 @@ export default function LoginPage() {
         </CardFooter>
       </Card>
       
-      <div className="fixed bottom-10 text-center w-full">
+      {/* <div className="fixed bottom-10 text-center w-full">
         <p className="text-slate-400/60 text-[10px] font-bold tracking-[0.2em] uppercase">Powered by Antigravity AI Engine</p>
-      </div>
+      </div> */}
     </div>
   );
 }
