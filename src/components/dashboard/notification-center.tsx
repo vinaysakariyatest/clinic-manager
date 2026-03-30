@@ -38,27 +38,31 @@ export function NotificationCenter() {
       const data = await response.json();
 
       if (data.success && data.appointment) {
-        const { id, patientName, doctorName, time } = data.appointment;
+        const { id, patientName, doctorName, time, createdAt } = data.appointment;
 
-        if (isFirstRun.current) {
-          lastIdRef.current = id;
-          isFirstRun.current = false;
-          return;
-        }
-
+        // If it's a completely new ID we haven't seen in this session
         if (id !== lastIdRef.current) {
+          const isActuallyNew = lastIdRef.current !== null; // It's a brand new one during the session
+          const isVeryRecent = (Date.now() - new Date(createdAt).getTime()) < 60000; // Less than 1 min old
+
           lastIdRef.current = id;
           
-          // Add to notifications list
-          setNotifications(prev => [data.appointment, ...prev]);
-          setUnreadCount(prev => prev + 1);
-          
-          // Still show toast for active feedback
-          toast.success(`🎉 New Booking!`, {
-            description: `${patientName} with ${doctorName}`,
-            icon: <CalendarCheck className="h-5 w-5 text-indigo-600" />,
-            duration: 5000,
+          // Add to the list
+          setNotifications(prev => {
+            if (prev.some(n => n.id === id)) return prev;
+            return [data.appointment, ...prev].slice(0, 5); // Keep last 5
           });
+
+          // Show UI alert IF (it's new during session) OR (it's very fresh on first load)
+          if (isActuallyNew || isVeryRecent) {
+            setUnreadCount(prev => prev + 1);
+            
+            toast.success(`🎉 New Patient Booking!`, {
+              description: `${patientName} with ${doctorName} (Booked at ${new Date(createdAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })})`,
+              icon: <CalendarCheck className="h-5 w-5 text-indigo-600" />,
+              duration: 10000,
+            });
+          }
         }
       }
     } catch (error) {
@@ -68,7 +72,8 @@ export function NotificationCenter() {
 
   useEffect(() => {
     fetchLatest();
-    const interval = setInterval(fetchLatest, 10000);
+    // Poll every 5 seconds for more responsiveness during testing
+    const interval = setInterval(fetchLatest, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -79,11 +84,11 @@ export function NotificationCenter() {
 
   return (
     <Popover onOpenChange={(open) => { if (open) setUnreadCount(0); }}>
-      <PopoverTrigger className={cn(buttonVariants({ variant: "outline", size: "icon" }), "h-8 w-8 relative group border-slate-200 cursor-pointer")}>
-          <Bell className="h-4 w-4 text-slate-600 group-hover:text-indigo-600 transition-colors" />
+      <PopoverTrigger className={cn(buttonVariants({ variant: "outline", size: "icon" }), "h-9 w-9 relative group border-slate-200 cursor-pointer shadow-sm")}>
+          <Bell className="h-4.5 w-4.5 text-slate-600 group-hover:text-indigo-600 transition-colors" />
           {unreadCount > 0 && (
             <Badge 
-              className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 bg-red-500 border-2 border-white hover:bg-red-600 animate-in zoom-in"
+              className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-1 bg-rose-500 text-white border-2 border-white hover:bg-rose-600 animate-in zoom-in font-black text-[10px]"
             >
               {unreadCount}
             </Badge>
@@ -94,9 +99,8 @@ export function NotificationCenter() {
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
           <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
             <Info className="w-4 h-4 text-indigo-600" />
-            Recent Activity
+            Recent Bookings
           </h3>
-
           <Button 
             variant="ghost" 
             size="sm" 
@@ -108,10 +112,10 @@ export function NotificationCenter() {
             Clear
           </Button>
         </div>
-        <div className="max-h-[300px] overflow-y-auto overflow-x-hidden custom-scrollbar">
+        <div className="max-h-[350px] overflow-y-auto overflow-x-hidden custom-scrollbar">
           {notifications.length === 0 ? (
-            <div className="p-8 text-center bg-slate-50/50">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="p-8 text-center bg-slate-50/20">
+              <div className="w-12 h-12 bg-slate-100/50 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Bell className="w-6 h-6 text-slate-300" />
               </div>
               <p className="text-sm text-slate-400 font-medium">No new notifications</p>
@@ -121,22 +125,27 @@ export function NotificationCenter() {
             notifications.map((notif) => (
               <div 
                 key={notif.id} 
-                className="p-4 border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-default"
+                className="p-4 border-b border-slate-50 hover:bg-indigo-50/30 transition-colors group cursor-default"
               >
                 <div className="flex gap-3">
-                  <div className="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
-                    <CalendarCheck className="h-4 w-4 text-indigo-600" />
+                  <div className="h-9 w-9 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
+                    <CalendarCheck className="h-5 w-5 text-indigo-600" />
                   </div>
                   <div className="space-y-1 overflow-hidden">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">
+                    <p className="text-sm font-black text-slate-800 leading-tight">
                       Booking Confirmed
                     </p>
-                    <p className="text-[12px] text-slate-500 line-clamp-1">
+                    <p className="text-[12px] text-slate-500 line-clamp-1 font-medium">
                       {notif.patientName} with {notif.doctorName}
                     </p>
-                    <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider">
-                      {new Date(notif.time).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="text-[10px] bg-indigo-100 text-indigo-700 font-black px-1.5 py-0.5 rounded uppercase">
+                        Booked at: {new Date(notif.createdAt).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </span>
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded uppercase">
+                        For: {new Date(notif.time).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -144,6 +153,7 @@ export function NotificationCenter() {
           )}
         </div>
         {notifications.length > 0 && (
+
           <div className="p-2 bg-slate-50 border-t border-slate-100">
              <Button 
                variant="ghost" 
