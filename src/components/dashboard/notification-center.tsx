@@ -76,17 +76,30 @@ export function NotificationCenter() {
                  window.speechSynthesis.cancel();
                  
                  const speech = new SpeechSynthesisUtterance();
-                 speech.text = `Attention! New appointment booked from ${patientName} with ${doctorName}.`;
-                 speech.lang = 'en-IN'; // Indian English for better accent
-                 speech.rate = 1.0;
-                 speech.pitch = 1.0;
+                 speech.text = `Attention please! A new appointment has been booked by ${patientName} for ${doctorName}.`;
+                 
+                 // Try to pick a high-quality female voice
+                 const voices = window.speechSynthesis.getVoices();
+                 const femaleVoice = voices.find(v => 
+                   (v.name.includes("Female") || v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Zira") || v.name.includes("Heera") || v.name.includes("Sangeeta") || v.name.includes("Veena")) && 
+                   (v.lang.startsWith("en"))
+                 );
+                 
+                 if (femaleVoice) {
+                   speech.voice = femaleVoice;
+                 }
+                 
+                 speech.lang = 'en-IN'; 
+                 speech.rate = 0.85; // Slightly slower for natural feel
+                 speech.pitch = 1.25; // Higher pitch for female tone
                  window.speechSynthesis.speak(speech);
                  
-                 console.log("[NotificationCenter] Sound and Speech triggered for:", id);
+                 console.log("[NotificationCenter] Female voice triggered:", femaleVoice?.name || "Default");
                } catch (err) {
                  console.error("[NotificationCenter] Voice error:", err);
                }
             }
+
 
 
             toast.success(`🎉 New Patient Booking!`, {
