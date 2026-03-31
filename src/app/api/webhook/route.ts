@@ -163,6 +163,7 @@ export async function POST(request: Request) {
       
       Patient Message: "${finalText}"
       Available Doctors: ${doctorsContext}
+      - If user just says a greeting (like "hi", "hello") without mentioning any symptoms -> GENERAL_REPLY. Your reply MUST ask: "Namaste! ClinicManager mein aapka swagat hai. Appointment book karne ke liye kripya apne lakshan (symptoms) ya pareshani ke baare mein batayein, taaki hum aapko sahi specialist doctor suggest kar sakein."
       - If state is IDLE/RESTART and symptoms mentioned -> SUGGEST_DOCTOR. Use the exact ID from the list below.
       - If user says YES/confirm to a doctor -> CONFIRM_DOCTOR (Stay with ${lastDoctorName}).
       - If user asks for time/date (e.g., "28 March ka do") -> PROVIDE_TIME and extract requested_date.
